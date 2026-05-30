@@ -4618,7 +4618,13 @@ async def ayuda(interaction: discord.Interaction):
     # ── Cocina ─────────────────────────────────────────────────
     embed.add_field(name="🧑‍🍳 Cocina",   value=(
         "`/cook` — Cocina 🦞 Langosta + hasta 3 ingredientes para conseguir buffs\n"
-        "`/ingredientes` — Ve tu despensa de ingredientes"
+        "`/ingredientes` — Ve tu despensa de ingredientes\n"
+        "`/recetas` — Ver tus hojas de receta descubiertas"
+    ), inline=False)
+    # ── Intercambios ───────────────────────────────────────────
+    embed.add_field(name="🔄 Intercambios", value=(
+        "`/trade @usuario` — Propone un intercambio de oro, figuras o ingredientes\n"
+        "`/gift @usuario` — Regala oro o figuras a otro jugador"
     ), inline=False)
     # ── Exploración & Quests ───────────────────────────────────
     embed.add_field(name="🗺️ Exploración & Quests", value=(
@@ -4691,7 +4697,8 @@ async def oro(interaction: discord.Interaction, usuario: discord.Member, cantida
         return
     target["coins"] = target.get("coins", 0) + cantidad
     save_db(db)
-    embed = discord.Embed(title="💰 ¡Monedas regaladas!", color=0xf1c40f)
+    embed = discord.Embed(title="💰 ¡LLUVIA DE ORO!", description=f"**{target['name']}** acaba de recibir una fortuna.", color=0xf1c40f)
+    embed.set_image(url="https://media.giphy.com/media/l0MYGb1LuZ3n7dRnO/giphy.gif")
     embed.add_field(name="👤 Receptor", value=f"{target['name']} ({usuario.mention})", inline=True)
     embed.add_field(name="💰 Cantidad", value=f"+**{cantidad:,}** monedas", inline=True)
     embed.add_field(name="💳 Nuevo saldo", value=f"**{target['coins']:,}** monedas", inline=True)
@@ -4754,7 +4761,8 @@ async def bomb(interaction: discord.Interaction, usuario: discord.Member, cantid
     before = target.get("coins", 0)
     target["coins"] = max(0, before - cantidad)
     save_db(db)
-    embed = discord.Embed(title="💣 ¡BOOM!", color=0xe74c3c)
+    embed = discord.Embed(title="💣 ¡BOOM!", description=f"**{target['name']}** acaba de perder una fortuna.", color=0xe74c3c)
+    embed.set_image(url="https://media.giphy.com/media/HhTXt43pk1I1W/giphy.gif")
     embed.add_field(name="👤 Usuario", value=target["name"], inline=True)
     embed.add_field(name="💸 Monedas eliminadas", value=f"-**{cantidad:,}**", inline=True)
     embed.add_field(name="💳 Saldo restante", value=f"**{target['coins']:,}**", inline=True)
@@ -4786,7 +4794,8 @@ async def nuke(interaction: discord.Interaction, usuario: discord.Member):
         description=f"**{nombre}** ha sido reseteado a nivel 1.\nSin monedas. Sin figuras. Sin nada.",
         color=0xff0000
     )
-    embed.set_footer(text="F en el chat")
+    embed.set_image(url="https://media.giphy.com/media/XUFPGrX5Zis6Y/giphy.gif")
+    embed.set_footer(text="F en el chat 🕯️")
     await interaction.response.send_message(embed=embed)
 
 # --- ROB ---
@@ -5268,7 +5277,6 @@ async def cook_cmd(interaction: discord.Interaction):
     if not user:
         await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
         return
-    # Verificar que tiene al menos una langosta
     lobster_idx = next((i for i, f in enumerate(user.get("figures", [])) if f["key"] == "lobster"), None)
     if lobster_idx is None:
         await interaction.response.send_message("❌ Necesitas al menos una 🦞 Langosta. Consíguela con `/lobster`.", ephemeral=True)
@@ -5279,142 +5287,113 @@ async def cook_cmd(interaction: discord.Interaction):
         await interaction.response.send_message("❌ No tienes ingredientes. ¡Gana batallas para conseguir algunos!", ephemeral=True)
         return
 
-    # Mostrar selector de ingredientes
-    ing_options = [discord.SelectOption(label=f"{emoji} {INGREDIENTS.get(emoji, emoji)} x{amt}", value=emoji, emoji=emoji)
-                   for emoji, amt in available.items()]
-
+    ing_options = [
+        discord.SelectOption(label=f"{INGREDIENTS.get(emoji, emoji)} x{amt}", value=emoji)
+        for emoji, amt in available.items()
+    ]
     state = {"selected": [], "user_id": interaction.user.id}
 
-    async def show_cook_menu(inter, state, is_first=False):
+    def make_embed():
         selected_str = " + ".join(state["selected"]) if state["selected"] else "_Ninguno aún_"
-        embed = discord.Embed(
+        return discord.Embed(
             title="🧑‍🍳 ¡Hora de cocinar!",
             description=f"🦞 Langosta + **{selected_str}**\n\nElige hasta 3 ingredientes y luego **Cocinar**:",
             color=0xe67e22
         )
-        view = discord.ui.View(timeout=60)
-        # Select de ingredientes
-        sel = discord.ui.Select(
-            placeholder="Añadir ingrediente...",
-            options=ing_options,
-            max_values=1
-        )
-        async def add_ingredient(si: discord.Interaction):
-            if si.user.id != state["user_id"]:
-                await si.response.send_message("❌ No es tu menú.", ephemeral=True)
-                return
-            chosen = sel.values[0]
-            if len(state["selected"]) >= 3:
-                await si.response.send_message("❌ Máximo 3 ingredientes.", ephemeral=True)
-                return
-            state["selected"].append(chosen)
-            await si.response.edit_message(
-                embed=discord.Embed(title="🧑‍🍳 ¡Hora de cocinar!", description=f"🦞 Langosta + **{' + '.join(state['selected'])}**\n\nElige más o presiona Cocinar:", color=0xe67e22),
-                view=build_cook_view(state, si)
-            )
-        sel.callback = add_ingredient
-        view.add_item(sel)
 
-        cook_btn = discord.ui.Button(label="🍳 ¡Cocinar!", style=discord.ButtonStyle.success, disabled=len(state["selected"]) == 0)
-        async def do_cook(ci: discord.Interaction):
-            if ci.user.id != state["user_id"]:
-                await ci.response.send_message("❌ No es tu menú.", ephemeral=True)
-                return
-            global global_recipe_count, lobster_madre_active
-            db2 = load_db()
-            user2 = get_user(db2, ci.user.id)
-            # Verificar langosta
-            lb_idx = next((i for i, f in enumerate(user2.get("figures", [])) if f["key"] == "lobster"), None)
-            if lb_idx is None:
-                await ci.response.edit_message(content="❌ Ya no tienes langosta.", embed=None, view=None)
-                return
-            # Verificar ingredientes
-            ings2 = user2.get("ingredients", {})
-            for ing in state["selected"]:
-                if ings2.get(ing, 0) <= 0:
-                    await ci.response.edit_message(content=f"❌ Ya no tienes {ing}.", embed=None, view=None)
+    def make_view():
+        view = discord.ui.View(timeout=60)
+
+        if len(state["selected"]) < 3:
+            sel = discord.ui.Select(placeholder="Añadir ingrediente...", options=ing_options, max_values=1)
+            async def add_ingredient(si: discord.Interaction):
+                if si.user.id != state["user_id"]:
+                    await si.response.send_message("❌ No es tu menú.", ephemeral=True)
                     return
-            # Consumir
-            user2["figures"].pop(lb_idx)
-            for ing in state["selected"]:
-                ings2[ing] -= 1
-            user2["ingredients"] = ings2
-            # Buscar receta
-            matched = None
-            for recipe in RECIPES:
-                recipe_ings = set(recipe["ingredients"])
-                used = set(["🦞"] + state["selected"])
-                if recipe_ings == used:
-                    matched = recipe
-                    break
-            global_recipe_count += 1
-            if "recipe_count" not in user2:
-                user2["recipe_count"] = 0
-            user2["recipe_count"] = user2.get("recipe_count", 0) + 1
-            # Aplicar efecto
-            result_desc = ""
-            if matched:
-                if "buffs" not in user2:
-                    user2["buffs"] = []
-                user2["buffs"].append({"effect": matched["effect"], "value": matched["value"], "turns": matched["turns"]})
-                if matched["effect"] == "level_fig":
-                    team = user2.get("team", [])
-                    if team and team[0] is not None and team[0] < len(user2.get("figures", [])):
-                        user2["figures"][team[0]]["level"] = user2["figures"][team[0]].get("level", 1) + 1
-                result_desc = matched["desc"]
-                recipe_name = matched["name"]
-            else:
-                # Receta desconocida: monedas aleatorias
-                coins = random.randint(50, 200)
-                user2["coins"] = user2.get("coins", 0) + coins
-                recipe_name = "🍲 Receta Experimental"
-                result_desc = f"No es receta conocida, pero huele bien. +{coins}🪙"
-            save_db(db2)
-            embed2 = discord.Embed(
-                title=f"✅ {recipe_name}",
-                description=result_desc,
-                color=0x2ecc71
-            )
-            embed2.set_footer(text=f"Recetas globales: {global_recipe_count}/{TOTAL_RECIPES_FOR_EVENT}")
-            await ci.response.edit_message(embed=embed2, view=None)
-            # ¿Langosta Madre?
-            if global_recipe_count >= TOTAL_RECIPES_FOR_EVENT and not lobster_madre_active:
-                lobster_madre_active = True
-                await trigger_lobster_madre(ci.channel)
-        cook_btn.callback = do_cook
-        view.add_item(cook_btn)
+                state["selected"].append(sel.values[0])
+                await si.response.edit_message(embed=make_embed(), view=make_view())
+            sel.callback = add_ingredient
+            view.add_item(sel)
+
+        if len(state["selected"]) > 0:
+            undo_btn = discord.ui.Button(label="↩️ Quitar último", style=discord.ButtonStyle.secondary)
+            async def undo(ui: discord.Interaction):
+                if ui.user.id != state["user_id"]:
+                    await ui.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                state["selected"].pop()
+                await ui.response.edit_message(embed=make_embed(), view=make_view())
+            undo_btn.callback = undo
+            view.add_item(undo_btn)
+
+            cook_btn = discord.ui.Button(label="🍳 ¡Cocinar!", style=discord.ButtonStyle.success)
+            async def do_cook(ci: discord.Interaction):
+                if ci.user.id != state["user_id"]:
+                    await ci.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                global global_recipe_count, lobster_madre_active
+                db2 = load_db()
+                user2 = get_user(db2, ci.user.id)
+                lb_idx = next((i for i, f in enumerate(user2.get("figures", [])) if f["key"] == "lobster"), None)
+                if lb_idx is None:
+                    await ci.response.edit_message(content="❌ Ya no tienes langosta.", embed=None, view=None)
+                    return
+                ings2 = user2.get("ingredients", {})
+                for ing in state["selected"]:
+                    if ings2.get(ing, 0) <= 0:
+                        await ci.response.edit_message(content=f"❌ Ya no tienes {ing}.", embed=None, view=None)
+                        return
+                # Consumir langosta e ingredientes
+                user2["figures"].pop(lb_idx)
+                for ing in state["selected"]:
+                    ings2[ing] -= 1
+                user2["ingredients"] = ings2
+                # Buscar receta
+                matched = None
+                for recipe in RECIPES:
+                    if set(recipe["ingredients"]) == set(["🦞"] + state["selected"]):
+                        matched = recipe
+                        break
+                # Verificar hojas de receta conocidas
+                if not matched:
+                    for idx in user2.get("recipe_sheets", []):
+                        if idx < len(RECIPES):
+                            recipe = RECIPES[idx]
+                            if set(recipe["ingredients"]) == set(["🦞"] + state["selected"]):
+                                matched = recipe
+                                break
+                global_recipe_count += 1
+                user2["recipe_count"] = user2.get("recipe_count", 0) + 1
+                if matched:
+                    if "buffs" not in user2:
+                        user2["buffs"] = []
+                    user2["buffs"].append({"effect": matched["effect"], "value": matched["value"], "turns": matched["turns"]})
+                    if matched["effect"] == "level_fig":
+                        team = user2.get("team", [])
+                        if team and team[0] is not None and team[0] < len(user2.get("figures", [])):
+                            fig = user2["figures"][team[0]]
+                            if fig.get("level", 1) < FIGURE_LEVEL_MAX:
+                                fig["level"] = fig.get("level", 1) + 1
+                    recipe_name = matched["name"]
+                    result_desc = matched["desc"]
+                    color = 0x2ecc71
+                else:
+                    recipe_name = "💀 Receta Fallida"
+                    result_desc = "Los ingredientes no tienen sinergia entre sí... Se arruinó la comida. No obtienes ningún beneficio.\n\n💡 _Tip: explora para encontrar Hojas de Receta._"
+                    color = 0xe74c3c
+                save_db(db2)
+                embed2 = discord.Embed(title=f"{'✅' if matched else '❌'} {recipe_name}", description=result_desc, color=color)
+                embed2.set_footer(text=f"Recetas globales: {global_recipe_count}/{TOTAL_RECIPES_FOR_EVENT}")
+                await ci.response.edit_message(embed=embed2, view=None)
+                if global_recipe_count >= TOTAL_RECIPES_FOR_EVENT and not lobster_madre_active:
+                    lobster_madre_active = True
+                    await trigger_lobster_madre(ci.channel)
+            cook_btn.callback = do_cook
+            view.add_item(cook_btn)
+
         return view
 
-    def build_cook_view(state, inter):
-        import asyncio as _asyncio
-        view = discord.ui.View(timeout=60)
-        sel2 = discord.ui.Select(placeholder="Añadir otro ingrediente...", options=ing_options, max_values=1)
-        async def add_again(si: discord.Interaction):
-            if si.user.id != state["user_id"]:
-                await si.response.send_message("❌ No es tu menú.", ephemeral=True)
-                return
-            chosen = sel2.values[0]
-            if len(state["selected"]) >= 3:
-                await si.response.send_message("❌ Máximo 3 ingredientes.", ephemeral=True)
-                return
-            state["selected"].append(chosen)
-            await si.response.edit_message(
-                embed=discord.Embed(title="🧑‍🍳 ¡Hora de cocinar!", description=f"🦞 Langosta + **{' + '.join(state['selected'])}**", color=0xe67e22),
-                view=build_cook_view(state, si)
-            )
-        sel2.callback = add_again
-        view.add_item(sel2)
-        cook2 = discord.ui.Button(label="🍳 ¡Cocinar!", style=discord.ButtonStyle.success)
-        cook2.callback = do_cook
-        view.add_item(cook2)
-        return view
-
-    view_final = await show_cook_menu(interaction, state, is_first=True)
-    await interaction.response.send_message(
-        embed=discord.Embed(title="🧑‍🍳 ¡Hora de cocinar!", description=f"🦞 Langosta + _Ninguno aún_\n\nElige ingredientes y luego Cocinar:", color=0xe67e22),
-        view=view_final,
-        ephemeral=True
-    )
+    await interaction.response.send_message(embed=make_embed(), view=make_view(), ephemeral=True)
 
 # ─── LANGOSTA MADRE (evento global) ───────────────────────────────────────────
 LOBSTER_MADRE_HP = 300000
@@ -6988,29 +6967,33 @@ async def trade(interaction: discord.Interaction, usuario: discord.Member):
         "confirmed":   {"offerer": False, "receiver": False},
     }
 
-    async def build_trade_embed():
+    def build_trade_embed():
         db2 = load_db()
         o2 = get_user(db2, interaction.user.id)
         r2 = get_user(db2, usuario.id)
         embed = discord.Embed(title="🔄 Propuesta de Trade", color=0x3498db)
-        embed.add_field(
-            name=f"📤 {o2['name']} ofrece",
-            value=(
-                f"💰 {trade_state['offer']['coins']:,}🪙\n"
-                + "\n".join(f"🎭 {FIGURES.get(fk,{{}}).get('name',fk)}" for fk in trade_state['offer']['figures'])
-                + "\n".join(f"{k} {INGREDIENTS.get(k,k)} x{v}" for k,v in trade_state['offer']['ingredients'].items() if v>0)
-            ) or "_(nada aún)_",
-            inline=True
-        )
-        embed.add_field(
-            name=f"📥 {r2['name']} ofrece",
-            value=(
-                f"💰 {trade_state['request']['coins']:,}🪙\n"
-                + "\n".join(f"🎭 {FIGURES.get(fk,{{}}).get('name',fk)}" for fk in trade_state['request']['figures'])
-                + "\n".join(f"{k} {INGREDIENTS.get(k,k)} x{v}" for k,v in trade_state['request']['ingredients'].items() if v>0)
-            ) or "_(nada aún)_",
-            inline=True
-        )
+
+        def side_value(side):
+            lines = []
+            if trade_state[side]["coins"] > 0:
+                lines.append(f"💰 {trade_state[side]['coins']:,}🪙")
+            for fk in trade_state[side]["figures"]:
+                fig = FIGURES.get(fk, {})
+                lines.append(f"🎭 {fig.get('name', fk)}")
+            for k, v in trade_state[side]["ingredients"].items():
+                if v > 0:
+                    lines.append(f"{k} {INGREDIENTS.get(k,k)} x{v}")
+            return "\n".join(lines) if lines else "_(nada aún)_"
+
+        embed.add_field(name=f"📤 {o2['name']} ofrece", value=side_value("offer"), inline=True)
+        embed.add_field(name=f"📥 {r2['name']} ofrece", value=side_value("request"), inline=True)
+
+        confirmed_str = []
+        if trade_state["confirmed"]["offerer"]: confirmed_str.append(f"✅ {o2['name']}")
+        if trade_state["confirmed"]["receiver"]: confirmed_str.append(f"✅ {r2['name']}")
+        if confirmed_str:
+            embed.set_footer(text="Confirmado por: " + ", ".join(confirmed_str))
+        return embed
 
     def build_trade_view():
         view = discord.ui.View(timeout=120)
@@ -7051,7 +7034,7 @@ async def trade(interaction: discord.Interaction, usuario: discord.Member):
                 # Ejecutar el trade
                 await execute_trade(inter, trade_state, interaction, usuario)
             else:
-                emb = await build_trade_embed()
+                emb = build_trade_embed()
                 await inter.response.edit_message(embed=emb, view=build_trade_view())
 
         async def cancel_cb(inter: discord.Interaction):
@@ -7074,7 +7057,7 @@ async def trade(interaction: discord.Interaction, usuario: discord.Member):
         return view
 
     pending_trades[usuario.id] = trade_state
-    emb = await build_trade_embed()
+    emb = build_trade_embed()
     await interaction.response.send_message(
         content=f"{usuario.mention} — **{offerer['name']}** quiere hacer un trade contigo!",
         embed=emb,
@@ -7106,7 +7089,7 @@ async def show_trade_add_menu(inter, trade_state, side, orig_inter, target_membe
                 await mi.response.send_message(f"❌ No tienes suficiente. Tienes {u2.get('coins',0):,}🪙", ephemeral=True)
                 return
             trade_state[side]["coins"] += amount
-            emb2 = await build_embed_fn()
+            emb2 = build_embed_fn()
             await mi.response.edit_message(embed=emb2, view=build_view_fn())
         modal.on_submit = gold_submit
         await gi.response.send_modal(modal)
@@ -7134,7 +7117,7 @@ async def show_trade_add_menu(inter, trade_state, side, orig_inter, target_membe
         sel = discord.ui.Select(placeholder="Figura a añadir...", options=options)
         async def fig_sel_cb(si: discord.Interaction):
             trade_state[side]["figures"].append(sel.values[0])
-            emb2 = await build_embed_fn()
+            emb2 = build_embed_fn()
             await si.response.edit_message(embed=emb2, view=build_view_fn())
         sel.callback = fig_sel_cb
         sv = discord.ui.View(timeout=60)
@@ -7165,7 +7148,7 @@ async def show_trade_add_menu(inter, trade_state, side, orig_inter, target_membe
                 if qty <= 0 or qty > ings[chosen]:
                     await mi.response.send_message(f"❌ Máximo {ings[chosen]}.", ephemeral=True); return
                 trade_state[side]["ingredients"][chosen] = trade_state[side]["ingredients"].get(chosen,0) + qty
-                emb2 = await build_embed_fn()
+                emb2 = build_embed_fn()
                 await mi.response.edit_message(embed=emb2, view=build_view_fn())
             modal.on_submit = ing_modal_sub
             await si.response.send_modal(modal)

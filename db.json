@@ -3,16 +3,35 @@
     "1236293193893412975": {
       "name": "Gamer64",
       "coins": 0,
-      "figures": [],
+      "figures": [
+        {
+          "key": "santa_vaca",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "lobster",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "santa_vaca",
+          "level": 1,
+          "xp": 0
+        }
+      ],
       "team": [
-        null,
-        null,
-        null
+        0,
+        1,
+        2
       ],
       "wins": 0,
       "losses": 0,
       "level": 1,
-      "xp": 0
+      "xp": 0,
+      "ingredients": {
+        "🐮": 2
+      }
     },
     "1411518770362454046": {
       "name": "Michi",
