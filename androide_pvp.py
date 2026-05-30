@@ -2512,16 +2512,29 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             if current_phase < 4:
                 next_phase = current_phase + 1
                 defender["og_phase"] = next_phase
-                revive_hp = defender["max_hp"]  # vida completa al cambiar de fase
-                defender["hp"] = revive_hp
+                # Buffs por fase: +HP, +ATK, +DEF, +VEL
+                phase_buffs = {
+                    2: {"hp": 30,  "atk": 5,  "defense": 5,  "label": "🟣 FASE 2 — Glitched"},
+                    3: {"hp": 60,  "atk": 10, "defense": 10, "label": "🟡 FASE 3 — Ki"},
+                    4: {"hp": 100, "atk": 20, "defense": 20, "label": "🔴 FASE 4 — Godlike"},
+                }
+                buffs = phase_buffs[next_phase]
+                new_max_hp = defender["max_hp"] + buffs["hp"]
+                defender["max_hp"] = new_max_hp
+                defender["hp"] = new_max_hp
+                defender["atk"] = defender["atk"] + buffs["atk"]
+                defender["defense"] = defender["defense"] + buffs["defense"]
                 defender["energy"] = 0
-                phase_names = {2: "🟣 FASE 2 — Glitched", 3: "🟡 FASE 3 — Ki", 4: "🔴 FASE 4 — Godlike"}
+                # Reemplazar habilidades por las de la nueva fase
+                all_skills = FIGURE_SKILLS.get("og_gamer64", [])
+                defender["skills"] = [sk for sk in all_skills if sk.get("phase") == next_phase]
                 battle.log.append(f"💀 ¡**ＯＧ　ＧＡＭＥＲ　６４** no puede morir así!")
-                battle.log.append(f"🔱 ¡Entra en **{phase_names[next_phase]}**! Vida completa restaurada!")
+                battle.log.append(f"🔱 ¡Entra en **{buffs['label']}**!")
+                battle.log.append(f"   ❤️ +{buffs['hp']} HP máx · ⚔️ +{buffs['atk']} ATK · 🛡️ +{buffs['defense']} DEF · ¡Vida completa!")
                 battle.turn = 2 if battle.turn == 1 else 1
                 await finish_turn(interaction, battle, channel_id)
                 return
-            # Fase 4 muerta → muerte definitiva, continúa el flujo normal
+            # Fase 4 → muerte definitiva, continúa el flujo normal
 
         def_team     = battle.p2_team if battle.turn == 1 else battle.p1_team
         def_idx_attr = "p2_active"    if battle.turn == 1 else "p1_active"
@@ -2930,6 +2943,45 @@ async def bot_turn(interaction, battle: BattleState, channel_id: int):
             p1_fig["energy"] = 0
             battle.log.append(f"💫 **{p1_fig['emoji']} {p1_fig['name']}** se cansó de rodeos, ¡se arranca el brazo y entra a su **Fase 2**!")
             battle.log.append(f"   Se levanta con **{revive_hp} HP** (80% de su vida máxima)!")
+        # Pasiva de OG GAMER 64
+        elif p1_fig.get("key") == "og_gamer64":
+            current_phase = p1_fig.get("og_phase", 1)
+            if current_phase < 4:
+                next_phase = current_phase + 1
+                p1_fig["og_phase"] = next_phase
+                phase_buffs = {
+                    2: {"hp": 30,  "atk": 5,  "defense": 5,  "label": "🟣 FASE 2 — Glitched"},
+                    3: {"hp": 60,  "atk": 10, "defense": 10, "label": "🟡 FASE 3 — Ki"},
+                    4: {"hp": 100, "atk": 20, "defense": 20, "label": "🔴 FASE 4 — Godlike"},
+                }
+                buffs = phase_buffs[next_phase]
+                new_max_hp = p1_fig["max_hp"] + buffs["hp"]
+                p1_fig["max_hp"] = new_max_hp
+                p1_fig["hp"] = new_max_hp
+                p1_fig["atk"] = p1_fig["atk"] + buffs["atk"]
+                p1_fig["defense"] = p1_fig["defense"] + buffs["defense"]
+                p1_fig["energy"] = 0
+                all_skills = FIGURE_SKILLS.get("og_gamer64", [])
+                p1_fig["skills"] = [sk for sk in all_skills if sk.get("phase") == next_phase]
+                battle.log.append(f"💀 ¡**ＯＧ　ＧＡＭＥＲ　６４** no puede morir así!")
+                battle.log.append(f"🔱 ¡Entra en **{buffs['label']}**!")
+                battle.log.append(f"   ❤️ +{buffs['hp']} HP máx · ⚔️ +{buffs['atk']} ATK · 🛡️ +{buffs['defense']} DEF · ¡Vida completa!")
+            else:
+                # Fase 4 muerta → muerte definitiva
+                if not battle.any_alive(battle.p1_team):
+                    await end_battle(interaction, battle, channel_id, winner_turn=2)
+                    return
+                next_idx = battle.next_alive(battle.p1_team, battle.p1_active)
+                if next_idx is None:
+                    next_idx = next((i for i, f in enumerate(battle.p1_team) if f["hp"] > 0), None)
+                if next_idx is not None:
+                    battle.p1_active = next_idx
+                    new_fig = battle.p1_team[next_idx]
+                    battle.log.append(f"💀 **{p1_fig['name']}** fue derrotado definitivamente!")
+                    battle.log.append(f"🔄 ¡Entra **{new_fig['emoji']} {new_fig['name']}**!")
+                else:
+                    await end_battle(interaction, battle, channel_id, winner_turn=2)
+                    return
         else:
             # ¿Queda alguna figura viva?
             if not battle.any_alive(battle.p1_team):

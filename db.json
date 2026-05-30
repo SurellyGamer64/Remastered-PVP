@@ -2,22 +2,22 @@
   "users": {
     "1236293193893412975": {
       "name": "Gamer64",
-      "coins": 99700002,
+      "coins": 99700102,
       "figures": [
         {
           "key": "og_gamer64",
           "level": 1,
-          "xp": 0
+          "xp": 16
         },
         {
           "key": "og_gamer64",
           "level": 1,
-          "xp": 0
+          "xp": 16
         },
         {
           "key": "og_gamer64",
           "level": 1,
-          "xp": 0
+          "xp": 16
         }
       ],
       "team": [
@@ -25,13 +25,15 @@
         1,
         2
       ],
-      "wins": 0,
+      "wins": 1,
       "losses": 0,
       "level": 1,
-      "xp": 0,
+      "xp": 50,
       "ingredients": {
-        "🐮": 2
-      }
+        "🐮": 1,
+        "🥚": -1
+      },
+      "recipe_count": 1
     },
     "1411518770362454046": {
       "name": "Michi",
