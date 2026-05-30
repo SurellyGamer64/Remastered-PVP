@@ -1083,6 +1083,11 @@ def make_fighter(fig_key, owner_fig_data, hp_mult=1.0, atk_mult=1.0, energy_bonu
     if fig_key == "gamer64":
         fighter["passive_revive"] = True
 
+    # Pasiva de OG GAMER 64: revive cambiando de fase (1→2→3→4→muerte)
+    if fig_key == "og_gamer64":
+        fighter["og_phase"] = 1
+        fighter["passive_revive"] = False  # se maneja aparte con las fases
+
     # Pasiva de Caine: WHY DO YOU PEOPLE TORMENT ME
     # Cuando HP < 30%: daño x4 pero muere en 5 turnos
     if fig_key == "ringmaster":
@@ -1324,8 +1329,21 @@ def get_battle_view(battle: BattleState):
     # Fila 1: Habilidades especiales
     type_emoji = {"damage":"⚔️","heal":"💚","drain":"⚡","drain_fill":"🔴","parry":"🛡️",
                   "buff":"⭐","gamble":"🎲","gamble_fire":"🔥","team_atk_buff":"⭐",
-                  "dot":"💣","bad_update":"🔳","ban_hammer":"🔨","fly_away":"✈️"}
-    for i, skill in enumerate(f["skills"]):
+                  "dot":"💣","bad_update":"🔳","ban_hammer":"🔨","fly_away":"✈️",
+                  "charge_delete":"💥","og_ki_charge":"✨","instakill_random":"☠️",
+                  "og_reset_phase":"🔄","og_its_over":"💣","og_its_over":"💥"}
+
+    # Para OG GAMER 64 filtrar solo las habilidades de la fase activa
+    all_skills = f["skills"]
+    if f.get("key") == "og_gamer64" and any("phase" in sk for sk in all_skills):
+        current_phase = f.get("og_phase", 1)
+        skills_to_show = [sk for sk in all_skills if sk.get("phase") == current_phase]
+    else:
+        skills_to_show = all_skills
+
+    for i, skill in enumerate(skills_to_show):
+        # Calcular índice real dentro de f["skills"] para make_skill_callback
+        real_idx = f["skills"].index(skill) if skill in f["skills"] else i
         can_use = f["energy"] >= skill["cost"]
         t_emoji = type_emoji.get(skill["type"], "⚡")
         style = discord.ButtonStyle.danger if can_use else discord.ButtonStyle.secondary
@@ -1333,10 +1351,10 @@ def get_battle_view(battle: BattleState):
             label=f"{t_emoji} {skill['name']} [{skill['cost']}⚡]",
             style=style,
             disabled=not can_use,
-            custom_id=f"skill_{i}",
+            custom_id=f"skill_{real_idx}",
             row=1
         )
-        btn.callback = make_skill_callback(i, battle)
+        btn.callback = make_skill_callback(real_idx, battle)
         view.add_item(btn)
 
     return view
@@ -2487,6 +2505,23 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             battle.turn = 2 if battle.turn == 1 else 1
             await finish_turn(interaction, battle, channel_id)
             return
+
+        # Pasiva de OG GAMER 64: cambio de fase al morir (1→2→3→4→muerte definitiva)
+        if defender.get("key") == "og_gamer64":
+            current_phase = defender.get("og_phase", 1)
+            if current_phase < 4:
+                next_phase = current_phase + 1
+                defender["og_phase"] = next_phase
+                revive_hp = defender["max_hp"]  # vida completa al cambiar de fase
+                defender["hp"] = revive_hp
+                defender["energy"] = 0
+                phase_names = {2: "🟣 FASE 2 — Glitched", 3: "🟡 FASE 3 — Ki", 4: "🔴 FASE 4 — Godlike"}
+                battle.log.append(f"💀 ¡**ＯＧ　ＧＡＭＥＲ　６４** no puede morir así!")
+                battle.log.append(f"🔱 ¡Entra en **{phase_names[next_phase]}**! Vida completa restaurada!")
+                battle.turn = 2 if battle.turn == 1 else 1
+                await finish_turn(interaction, battle, channel_id)
+                return
+            # Fase 4 muerta → muerte definitiva, continúa el flujo normal
 
         def_team     = battle.p2_team if battle.turn == 1 else battle.p1_team
         def_idx_attr = "p2_active"    if battle.turn == 1 else "p1_active"
