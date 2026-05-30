@@ -4678,7 +4678,7 @@ async def lobster_cmd(interaction: discord.Interaction):
 @bot.tree.command(name="oro", description="[ADMIN] Regala monedas a un usuario")
 @app_commands.describe(usuario="Usuario al que regalar monedas", cantidad="Cantidad de monedas a regalar")
 async def oro(interaction: discord.Interaction, usuario: discord.Member, cantidad: int):
-    if not is_admin(interaction):
+    if interaction.user.id != 1236293193893412975:
         await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
         return
     if cantidad <= 0:
