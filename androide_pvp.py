@@ -1675,7 +1675,19 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 else:
                     battle.log.append(f"   🔒 ¡**{defender['name']}** bloqueada {turns} turnos!")
 
-        elif stype == "heal":
+            # bar_drain — drena energía del oponente (Cannon Arm)
+            if skill.get("bar_drain"):
+                drain_amt = skill["bar_drain"]
+                defender["energy"] = max(0, defender.get("energy", 0) - drain_amt)
+                battle.log.append(f"   ⚡ ¡La barra de energía de **{defender['name']}** se redujo **{drain_amt}⚡**!")
+
+            # team_atk_buff inline en damage (Chaos Control)
+            if skill.get("team_atk_buff"):
+                buff_val = skill["team_atk_buff"]
+                for ally in atk_team:
+                    if ally["hp"] > 0:
+                        ally["atk"] = ally.get("atk", 0) + buff_val
+                battle.log.append(f"   ⭐ ¡Todas las figuras aliadas ganan +{buff_val} ATK permanente!")
             # Respetar no_heal
             if attacker.get("no_heal"):
                 battle.log.append(f"❌ **{attacker['name']}** no puede recuperar vida hasta el fin de la batalla!")
@@ -2491,6 +2503,78 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 else:
                     battle.log.append(f"🪓 No hay aliados que curar.")
             battle.log.append(f"   _{skill['desc']}_")
+
+        # ── OG GAMER 64 habilidades especiales ──────────────────────────
+
+        elif stype == "charge_delete":
+            # [[TEXT NOT FOUND]] — usada 2 veces seguidas elimina la figura activa del oponente
+            prev_charges = attacker.get("charge_delete_count", 0)
+            attacker["charge_delete_count"] = prev_charges + 1
+            if attacker["charge_delete_count"] >= 2:
+                attacker["charge_delete_count"] = 0
+                defender["hp"] = 0
+                battle.log.append(f"💥 **{attacker['emoji']} {attacker['name']}** terminó de recargar... ¡la energía explota sobre **{defender['emoji']} {defender['name']}**!")
+                battle.log.append(f"   ☠️ **{defender['name']}** fue eliminado instantáneamente!")
+            else:
+                battle.log.append(f"⚡ **{attacker['emoji']} {attacker['name']}** empieza a recargar... (**1/2**) ¡Usa la habilidad otra vez para eliminar a {defender['name']}!")
+
+        elif stype == "og_ki_charge":
+            # Ki Charge — +100 HP, +20 ATK/DEF, acumulable, permanente
+            ki_hp   = skill.get("ki_hp", 100)
+            ki_stat = skill.get("ki_stat", 20)
+            attacker["max_hp"] += ki_hp
+            attacker["hp"]     = min(attacker["max_hp"], attacker["hp"] + ki_hp)
+            attacker["atk"]     += ki_stat
+            attacker["defense"] += ki_stat
+            stacks = attacker.get("ki_stacks", 0) + 1
+            attacker["ki_stacks"] = stacks
+            battle.log.append(f"✨ **{attacker['emoji']} {attacker['name']}** carga su Ki! (x{stacks})")
+            battle.log.append(f"   ❤️ +{ki_hp} HP máx · ⚔️ +{ki_stat} ATK · 🛡️ +{ki_stat} DEF — ¡Acumulable!")
+
+        elif stype == "instakill_random":
+            # Godlike — mata a una figura aleatoria del oponente
+            alive_enemies = [f for f in def_team if f["hp"] > 0]
+            if alive_enemies:
+                chosen = random.choice(alive_enemies)
+                chosen["hp"] = 0
+                battle.log.append(f"☠️ **{attacker['emoji']} {attacker['name']}** flota... agarra a **{chosen['emoji']} {chosen['name']}** y la aplasta con sus manos!")
+                battle.log.append(f"   ¡**{chosen['name']}** fue eliminada instantáneamente!")
+            else:
+                battle.log.append(f"☠️ No hay figuras enemigas que eliminar.")
+
+        elif stype == "og_reset_phase":
+            # Prismatic Energy — regresa a Fase 1 con vida completa
+            attacker["og_phase"] = 1
+            all_skills = FIGURE_SKILLS.get("og_gamer64", [])
+            attacker["skills"] = [sk for sk in all_skills if sk.get("phase") == 1]
+            attacker["hp"]     = attacker["max_hp"]
+            attacker["energy"] = 0
+            battle.log.append(f"🔄 **{attacker['emoji']} {attacker['name']}** regresa el tiempo...")
+            battle.log.append(f"   ¡Vuelve a **🔵 FASE 1** con **{attacker['hp']} HP** completos!")
+
+        elif stype == "og_its_over":
+            # ITS OVER! — mata a todos los enemigos y a sí mismo, -20 HP a aliados
+            splash = skill.get("power", 20)
+            # Matar todos los enemigos
+            killed = []
+            for enemy in def_team:
+                if enemy["hp"] > 0:
+                    enemy["hp"] = 0
+                    killed.append(f"{enemy['emoji']} {enemy['name']}")
+            # Daño splash a aliados
+            splashed = []
+            for ally in atk_team:
+                if ally is not attacker and ally["hp"] > 0:
+                    ally["hp"] = max(0, ally["hp"] - splash)
+                    splashed.append(f"{ally['emoji']} {ally['name']} (-{splash} HP)")
+            # Matar al propio Gamer
+            attacker["hp"] = 0
+            battle.log.append(f"💥 **{attacker['emoji']} {attacker['name']}** explota con todo su poder... ¡ITS OVER!")
+            if killed:
+                battle.log.append(f"   ☠️ Eliminados: {', '.join(killed)}")
+            if splashed:
+                battle.log.append(f"   💥 Daño de explosión a aliados: {', '.join(splashed)}")
+            battle.log.append(f"   💀 **{attacker['name']}** también cae en la explosión...")
 
     # ¿Cayó el defensor?
     if defender["hp"] <= 0:
