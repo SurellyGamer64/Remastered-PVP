@@ -23,10 +23,11 @@ def backup_db():
     key = request.args.get("key", "")
     if key != BACKUP_KEY:
         return "Clave incorrecta.", 403
-    if os.path.exists("db.json"):
-        return send_file("db.json", mimetype="application/json", as_attachment=True, download_name="db.json")
+    _db_file = "/etc/secrets/db.json" if os.path.exists("/etc/secrets/db.json") else "db.json"
+    if os.path.exists(_db_file):
+        return send_file(_db_file, mimetype="application/json", as_attachment=True, download_name="db.json")
     import json as _j2
-    return _j2.dumps({"usuarios": {}}), 200, {'Content-Type': 'application/json'}
+    return _j2.dumps({"users": {}}), 200, {'Content-Type': 'application/json'}
 
 @app.route('/upload_db', methods=['POST'])
 def upload_db():
@@ -37,8 +38,9 @@ def upload_db():
     data = request.get_json(force=True)
     if not data:
         return "Sin datos.", 400
-    with open("db.json", "w") as f:
-        _j2.dump(data, f, indent=2)
+    _db_file = "/etc/secrets/db.json" if os.path.exists("/etc/secrets") else "db.json"
+    with open(_db_file, "w", encoding="utf-8") as f:
+        _j2.dump(data, f, indent=2, ensure_ascii=False)
     return "Database restaurada correctamente.", 200
 
 def run(): app.run(host='0.0.0.0', port=8080)
@@ -52,21 +54,33 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 PREFIX = "!"
 
 # ============================================================
-#  BASE DE DATOS — JSON local (db.json)
-#  Usa /backup para descargar y /upload_db para restaurar
+#  BASE DE DATOS — Secret File persistente en Render
+#  Render guarda /etc/secrets/db.json entre reinicios
+#  Fallback a db.json local si no existe el secret
 # ============================================================
 
+DB_PATH = "/etc/secrets/db.json" if os.path.exists("/etc/secrets") else "db.json"
+
 def load_db() -> dict:
-    """Carga la database desde db.json."""
+    """Carga la database desde el archivo persistente."""
+    if os.path.exists(DB_PATH):
+        with open(DB_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    # Fallback al db.json local
     if os.path.exists("db.json"):
         with open("db.json", "r", encoding="utf-8") as f:
             return json.load(f)
     return {"users": {}}
 
 def save_db(db: dict):
-    """Guarda la database en db.json."""
-    with open("db.json", "w", encoding="utf-8") as f:
-        json.dump(db, f, indent=2, ensure_ascii=False)
+    """Guarda la database en el archivo persistente."""
+    try:
+        with open(DB_PATH, "w", encoding="utf-8") as f:
+            json.dump(db, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"⚠️ Error guardando en {DB_PATH}: {e} — intentando db.json local")
+        with open("db.json", "w", encoding="utf-8") as f:
+            json.dump(db, f, indent=2, ensure_ascii=False)
 
 def save_user(uid: str, data: dict):
     """Guarda un solo usuario en la database."""
