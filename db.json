@@ -2,12 +2,28 @@
   "users": {
     "1236293193893412975": {
       "name": "Gamer64",
-      "coins": 0,
-      "figures": [],
+      "coins": 99700002,
+      "figures": [
+        {
+          "key": "og_gamer64",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "og_gamer64",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "og_gamer64",
+          "level": 1,
+          "xp": 0
+        }
+      ],
       "team": [
-        null,
-        null,
-        null
+        0,
+        1,
+        2
       ],
       "wins": 0,
       "losses": 0,

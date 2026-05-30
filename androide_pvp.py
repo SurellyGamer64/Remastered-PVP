@@ -369,7 +369,7 @@ FIGURES = {
         "defense": 40,
         "speed": 32,
         "phases": 4,
-        "image": "https://i.imgur.com/gl2UZZ3.png",
+        "image": "https://i.postimg.cc/y8zY3Hyg/Normal.png",
         "passive": "og_gamer_phases",
     },
     "holy_cow": {
@@ -3265,7 +3265,7 @@ async def misfiguras(interaction: discord.Interaction, usuario: discord.Member =
         await interaction.response.send_message(msg, ephemeral=True)
         return
 
-    await show_figure_menu(interaction, user, figs, page=0)
+    await show_figure_menu(interaction, user, figs, page=0, viewed_user_id=target_member.id)
 
 def get_unique_figs(figs):
     """Devuelve lista de figuras únicas (sin duplicados) con conteo de copias.
@@ -3285,7 +3285,7 @@ def get_unique_figs(figs):
     ordered = sorted(seen.values(), key=lambda x: x["order"])
     return [(v["data"]["key"], v["data"], v["count"]) for v in ordered]
 
-def build_figure_embed(user, unique_figs, page):
+def build_figure_embed(user, unique_figs, page, viewed_user_id=None):
     key, fig_data, count = unique_figs[page]
     fig = FIGURES.get(key, {})
     lvl = fig_data.get("level", 1)
@@ -3297,6 +3297,13 @@ def build_figure_embed(user, unique_figs, page):
     star  = RARITY_STARS.get(rarity, "⚪")
     color = RARITY_COLOR.get(rarity, 0x95a5a6)
 
+    # Nombre especial en fuente wide (fullwidth unicode) para OG GAMER 64
+    fig_name = fig.get("name", key)
+    if key == "og_gamer64":
+        normal = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 "
+        wide   = "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ０１２３４５６７８９　"
+        fig_name = "".join(wide[normal.index(c)] if c in normal else c for c in fig_name)
+
     # ¿Está en el equipo?
     in_team = ""
     for t_pos, t_idx in enumerate(team):
@@ -3306,7 +3313,7 @@ def build_figure_embed(user, unique_figs, page):
     # Título con contador de copias
     copies_txt = f" ×{count}" if count > 1 else ""
     embed = discord.Embed(
-        title=f"{fig.get('emoji','')} {fig.get('name', key)}{copies_txt} {star}{in_team}",
+        title=f"{fig.get('emoji','')} {fig_name}{copies_txt} {star}{in_team}",
         description=f"Rareza: **{rarity.upper()}** | Precio: **{fig.get('price',0):,}🪙**",
         color=color
     )
@@ -3344,7 +3351,7 @@ def build_figure_embed(user, unique_figs, page):
             team_str += f"{pos_names[i]}: _(vacío)_\n"
     embed.add_field(name="⚔️ Tu equipo", value=team_str, inline=False)
 
-    # Habilidades
+    # Habilidades — para OG GAMER 64 agrupar por fase
     skills = FIGURE_SKILLS.get(key, [])
     type_emoji = {
         "damage":"⚔️","heal":"💚","drain":"⚡","drain_fill":"🔴","parry":"🛡️",
@@ -3353,15 +3360,38 @@ def build_figure_embed(user, unique_figs, page):
         "glitch_dmg":"🌀","corruption":"🌑","retribution":"🦷","fast_kill":"🔪",
         "consumed_fury":"💥","revive_team":"💀","heal_team_self":"🍗",
         "switch_sword":"🗡️","slash":"⚔️","lobster":"🦞",
+        "charge_delete":"💥","og_ki_charge":"✨","instakill_random":"☠️",
+        "og_reset_phase":"🔄","og_its_over":"💣",
     }
     bar_labels = {30:"🟡[30⚡]", 60:"🟠[60⚡]", 100:"🔴[100⚡]"}
-    skill_str = ""
-    for sk in skills:
-        te = type_emoji.get(sk["type"], "⚡")
-        bl = bar_labels.get(sk["cost"], f"[{sk['cost']}⚡]")
-        skill_str += f"{bl} {te} **{sk['name']}**\n_{sk['desc']}_\n\n"
-    if skill_str:
-        embed.add_field(name="✨ Habilidades", value=skill_str.strip(), inline=False)
+
+    if key == "og_gamer64" and any("phase" in sk for sk in skills):
+        # Agrupar por fase
+        phases_map = {}
+        for sk in skills:
+            ph = sk.get("phase", 1)
+            phases_map.setdefault(ph, []).append(sk)
+        phase_names = {1:"🔵 Fase 1", 2:"🟣 Fase 2", 3:"🟡 Fase 3", 4:"🔴 Fase 4"}
+        for ph in sorted(phases_map.keys()):
+            skill_str = ""
+            for sk in phases_map[ph]:
+                te = type_emoji.get(sk["type"], "⚡")
+                bl = bar_labels.get(sk["cost"], f"[{sk['cost']}⚡]")
+                skill_str += f"{bl} {te} **{sk['name']}**\n_{sk['desc']}_\n\n"
+            embed.add_field(name=phase_names.get(ph, f"Fase {ph}"), value=skill_str.strip(), inline=False)
+        embed.add_field(
+            name="🔱 Pasiva: Fases",
+            value="Gamer puede revivir después de morir. Cada muerte cambia su fase en orden numérico. Si muere en Fase 4, muere definitivamente.",
+            inline=False
+        )
+    else:
+        skill_str = ""
+        for sk in skills:
+            te = type_emoji.get(sk["type"], "⚡")
+            bl = bar_labels.get(sk["cost"], f"[{sk['cost']}⚡]")
+            skill_str += f"{bl} {te} **{sk['name']}**\n_{sk['desc']}_\n\n"
+        if skill_str:
+            embed.add_field(name="✨ Habilidades", value=skill_str.strip(), inline=False)
 
     if fig.get("image"):
         embed.set_image(url=fig["image"])
@@ -3369,9 +3399,11 @@ def build_figure_embed(user, unique_figs, page):
     embed.set_footer(text=f"Figura {page+1} de {len(unique_figs)}  •  Colección única")
     return embed
 
-def make_fig_view_sync(orig_user_id, user, unique_figs, page):
+def make_fig_view_sync(orig_user_id, user, unique_figs, page, viewed_user_id=None):
     view = discord.ui.View(timeout=120)
     total = len(unique_figs)
+    # viewed_user_id: si es None, se usa orig_user_id (viendo su propio inventario)
+    target_uid = viewed_user_id or orig_user_id
 
     prev_btn = discord.ui.Button(label="◀ Anterior", style=discord.ButtonStyle.secondary,
                                   disabled=page==0, custom_id="fig_prev", row=0)
@@ -3386,10 +3418,13 @@ def make_fig_view_sync(orig_user_id, user, unique_figs, page):
                 await inter.response.send_message("❌ Este menú no es tuyo.", ephemeral=True)
                 return
             db2 = load_db()
-            u2 = get_user(db2, inter.user.id)
+            u2 = get_user(db2, target_uid)   # ← carga al dueño del inventario, no al que clickea
+            if not u2:
+                await inter.response.send_message("❌ Usuario no encontrado.", ephemeral=True)
+                return
             uf2 = get_unique_figs(u2.get("figures", []))
-            embed2 = build_figure_embed(u2, uf2, new_page)
-            view2  = make_fig_view_sync(orig_user_id, u2, uf2, new_page)
+            embed2 = build_figure_embed(u2, uf2, new_page, viewed_user_id=target_uid)
+            view2  = make_fig_view_sync(orig_user_id, u2, uf2, new_page, viewed_user_id=target_uid)
             await inter.response.edit_message(embed=embed2, view=view2)
         return callback
 
@@ -3400,14 +3435,15 @@ def make_fig_view_sync(orig_user_id, user, unique_figs, page):
     view.add_item(next_btn)
     return view
 
-async def show_figure_menu(interaction, user, figs, page: int):
+async def show_figure_menu(interaction, user, figs, page: int, viewed_user_id=None):
     unique_figs = get_unique_figs(figs)
     if not unique_figs:
         await interaction.response.send_message("📭 No tienes figuras.", ephemeral=True)
         return
     page = min(page, len(unique_figs) - 1)
-    embed = build_figure_embed(user, unique_figs, page)
-    view  = make_fig_view_sync(interaction.user.id, user, unique_figs, page)
+    target_uid = viewed_user_id or interaction.user.id
+    embed = build_figure_embed(user, unique_figs, page, viewed_user_id=target_uid)
+    view  = make_fig_view_sync(interaction.user.id, user, unique_figs, page, viewed_user_id=target_uid)
     if hasattr(interaction, 'response') and not interaction.response.is_done():
         await interaction.response.send_message(embed=embed, view=view)
     else:
