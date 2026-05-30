@@ -3,27 +3,11 @@
     "1236293193893412975": {
       "name": "Gamer64",
       "coins": 0,
-      "figures": [
-        {
-          "key": "santa_vaca",
-          "level": 1,
-          "xp": 0
-        },
-        {
-          "key": "lobster",
-          "level": 1,
-          "xp": 0
-        },
-        {
-          "key": "santa_vaca",
-          "level": 1,
-          "xp": 0
-        }
-      ],
+      "figures": [],
       "team": [
-        0,
-        1,
-        2
+        null,
+        null,
+        null
       ],
       "wins": 0,
       "losses": 0,
@@ -35,37 +19,7 @@
     },
     "1411518770362454046": {
       "name": "Michi",
-      "coins": 29184,
-      "figures": [
-        {
-          "key": "gamer64",
-          "level": 1,
-          "xp": 0
-        },
-        {
-          "key": "donmanzanas",
-          "level": 1,
-          "xp": 0
-        },
-        {
-          "key": "chance",
-          "level": 1,
-          "xp": 0
-        }
-      ],
-      "team": [
-        1,
-        0,
-        2
-      ],
-      "wins": 0,
-      "losses": 0,
-      "level": 1,
-      "xp": 0
-    },
-    "1384663451648921610": {
-      "name": "Klin",
-      "coins": 18001,
+      "coins": 36501,
       "figures": [],
       "team": [
         null,
@@ -76,6 +30,23 @@
       "losses": 0,
       "level": 1,
       "xp": 0
+    },
+    "1384663451648921610": {
+      "name": "Klin",
+      "coins": 15001,
+      "figures": [],
+      "team": [
+        null,
+        null,
+        null
+      ],
+      "wins": 0,
+      "losses": 0,
+      "level": 1,
+      "xp": 0,
+      "ingredients": {
+        "🍫": 1
+      }
     }
   }
 }

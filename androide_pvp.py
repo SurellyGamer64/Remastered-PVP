@@ -358,7 +358,39 @@ FIGURES = {
         "speed": 41,
         "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQitxgXjvgIbadMnhQmNWfrG9uAdy7UC4Th_g&s",
     },
+    # ── FIGURAS SECRETAS (solo en /secret-store) ─────────────────
+    "og_gamer64": {
+        "name": "OG GAMER 64",
+        "emoji": "<a:GamerOld:1507162327794057377>",
+        "rarity": "Mítico",
+        "price": 99999,
+        "hp": 235,
+        "attack": 30,
+        "defense": 40,
+        "speed": 32,
+        "phases": 4,
+        "image": "https://i.imgur.com/gl2UZZ3.png",
+        "passive": "og_gamer_phases",
+    },
+    "holy_cow": {
+        "name": "Holy Cow",
+        "emoji": "🐄",
+        "rarity": "Mítico",
+        "price": 88888,
+        "hp": 500,
+        "attack": 50,
+        "defense": 50,
+        "speed": 50,
+        "image": "https://emblibrary.com/cdn/shop/files/M33422.jpg?v=1750188343&width=1214",
+    },
 }
+
+# Figuras exclusivas de la tienda secreta
+SECRET_FIGURES = ["og_gamer64", "holy_cow"]
+SECRET_CODE = "Th3-0g-G4m3R-64-I5-0P"
+SECRET_OWNER_ID = 1236293193893412975
+# Usuarios que han desbloqueado la tienda secreta (en memoria, se resetea al reiniciar)
+secret_store_unlocked = set([SECRET_OWNER_ID])
 
 RARITY_COLOR = {
     "común": 0x95a5a6,
@@ -3756,6 +3788,132 @@ _roblox_skills = [
 FIGURE_SKILLS["roblox"] = _roblox_skills
 FIGURE_SKILLS["roblox_boss"] = _roblox_skills
 
+# ── OG GAMER 64 — habilidades por fase ─────────────────────────
+# Las habilidades cambian según la fase activa (1-4).
+# La pasiva "og_gamer_phases" controla la revivificación con cambio de fase.
+FIGURE_SKILLS["og_gamer64"] = [
+    # ── FASE 1 ──────────────────────────────────────────────────
+    {
+        "name": "Heroic Pose",
+        "cost": 30,
+        "type": "team_atk_buff",
+        "power": 0,
+        "atk_buff": 10,
+        "team_buff": True,
+        "phase": 1,
+        "desc": "Gamer hace una pose que incrementa el daño de todos los aliados. +10 de daño a todos los aliados hasta hacer un ataque. ¡Acumulable!",
+    },
+    {
+        "name": "Cannon Arm",
+        "cost": 60,
+        "type": "damage",
+        "power": 45,
+        "stun": True,
+        "stun_turns": 3,
+        "bar_drain": 50,
+        "phase": 1,
+        "desc": "Gamer dispara su cañón. 45 de daño, -50 de carga en la barra del oponente y stun por 3 turnos.",
+    },
+    {
+        "name": "Childish Android",
+        "cost": 100,
+        "type": "damage",
+        "power": 150,
+        "phase": 1,
+        "desc": "Gamer se enfada. No puede ser que alguien sea más fuerte que él. 150 de daño masivo al oponente.",
+    },
+    # ── FASE 2 ──────────────────────────────────────────────────
+    {
+        "name": "Glitched Arm",
+        "cost": 30,
+        "type": "damage",
+        "power": 30,
+        "force_switch": True,
+        "force_switch_turns": 3,
+        "phase": 2,
+        "desc": "Gamer golpea el suelo con su brazo corrupto. 30 de daño y la figura actual del oponente queda bloqueada por 3 turnos.",
+    },
+    {
+        "name": "Corrupted Spikes",
+        "cost": 60,
+        "type": "dot",
+        "power": 0,
+        "dot_turns": 10,
+        "dot_power": 8,
+        "stun": True,
+        "stun_turns": 3,
+        "phase": 2,
+        "desc": "Gamer atrapa al oponente en espinas corruptas. Veneno por 10 turnos y stun de 3 turnos.",
+    },
+    {
+        "name": "[[TEXT NOT FOUND]]",
+        "cost": 100,
+        "type": "charge_delete",
+        "power": 0,
+        "charge_turns": 2,
+        "phase": 2,
+        "desc": "Gamer empieza a recargar un ataque. Si usas esta habilidad 2 veces seguidas, la figura actual del oponente desaparece.",
+    },
+    # ── FASE 3 ──────────────────────────────────────────────────
+    {
+        "name": "Ki Charge",
+        "cost": 30,
+        "type": "og_ki_charge",
+        "power": 0,
+        "ki_hp": 100,
+        "ki_stat": 20,
+        "phase": 3,
+        "desc": "Gamer carga su ki. +100 de vida, +20 de ataque, defensa y velocidad. ¡Acumulable hasta el final de la batalla!",
+    },
+    {
+        "name": "Kamehameha!",
+        "cost": 60,
+        "type": "damage",
+        "power": 60,
+        "stun": True,
+        "stun_turns": 3,
+        "phase": 3,
+        "desc": "Gamer lanza un láser de energía. 60 de daño y 3 turnos de stun al oponente.",
+    },
+    {
+        "name": "Godlike",
+        "cost": 100,
+        "type": "instakill_random",
+        "power": 0,
+        "phase": 3,
+        "desc": "Gamer flota, agarra una figura del oponente y la aplasta. Instakill a una figura aleatoria del oponente.",
+    },
+    # ── FASE 4 ──────────────────────────────────────────────────
+    {
+        "name": "Prismatic Energy",
+        "cost": 30,
+        "type": "og_reset_phase",
+        "power": 0,
+        "phase": 4,
+        "desc": "Gamer regresa el tiempo para repetir el ciclo. Regresa a la Fase 1 con vida completa.",
+    },
+    {
+        "name": "Chaos Control!",
+        "cost": 60,
+        "type": "damage",
+        "power": 0,
+        "stun": True,
+        "stun_turns": 10,
+        "team_atk_buff": 20,
+        "phase": 4,
+        "desc": "Gamer congela el tiempo. Stun de 10 turnos al oponente y +20 de daño a todas las figuras aliadas.",
+    },
+    {
+        "name": "ITS OVER!",
+        "cost": 100,
+        "type": "og_its_over",
+        "power": 20,
+        "self_destruct": True,
+        "phase": 4,
+        "desc": "Gamer explota acabando con todo. Mata a todas las figuras del oponente y a sí mismo. 20 de daño a las figuras aliadas por la explosión.",
+    },
+]
+
 # --- BATALLA CONTRA BOT ---
 @bot.tree.command(name="pvpbot", description="Elige un rival bot y batalla con tu equipo")
 async def pvpbot(interaction: discord.Interaction):
@@ -4623,8 +4781,7 @@ async def ayuda(interaction: discord.Interaction):
     ), inline=False)
     # ── Intercambios ───────────────────────────────────────────
     embed.add_field(name="🔄 Intercambios", value=(
-        "`/trade @usuario` — Propone un intercambio de oro, figuras o ingredientes\n"
-        "`/gift @usuario` — Regala oro o figuras a otro jugador"
+        "`/trade @usuario` — Propone un intercambio de oro, figuras o ingredientes"
     ), inline=False)
     # ── Exploración & Quests ───────────────────────────────────
     embed.add_field(name="🗺️ Exploración & Quests", value=(
@@ -4698,7 +4855,7 @@ async def oro(interaction: discord.Interaction, usuario: discord.Member, cantida
     target["coins"] = target.get("coins", 0) + cantidad
     save_db(db)
     embed = discord.Embed(title="💰 ¡LLUVIA DE ORO!", description=f"**{target['name']}** acaba de recibir una fortuna.", color=0xf1c40f)
-    embed.set_image(url="https://media.giphy.com/media/l0MYGb1LuZ3n7dRnO/giphy.gif")
+    embed.set_image(url="https://media0.giphy.com/media/v1.Y2lkPTZjMDliOTUydmF6Njd6dnd5a20xbzJsdXI1bnFsZmhkbDIwdTlvYmc5eG10MnQ1cyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/bMycGOQLESDCEnLNUz/giphy.gif")
     embed.add_field(name="👤 Receptor", value=f"{target['name']} ({usuario.mention})", inline=True)
     embed.add_field(name="💰 Cantidad", value=f"+**{cantidad:,}** monedas", inline=True)
     embed.add_field(name="💳 Nuevo saldo", value=f"**{target['coins']:,}** monedas", inline=True)
@@ -4762,7 +4919,7 @@ async def bomb(interaction: discord.Interaction, usuario: discord.Member, cantid
     target["coins"] = max(0, before - cantidad)
     save_db(db)
     embed = discord.Embed(title="💣 ¡BOOM!", description=f"**{target['name']}** acaba de perder una fortuna.", color=0xe74c3c)
-    embed.set_image(url="https://media.giphy.com/media/HhTXt43pk1I1W/giphy.gif")
+    embed.set_image(url="https://media.giphy.com/media/g2YdApKEna2sg/giphy.gif")
     embed.add_field(name="👤 Usuario", value=target["name"], inline=True)
     embed.add_field(name="💸 Monedas eliminadas", value=f"-**{cantidad:,}**", inline=True)
     embed.add_field(name="💳 Saldo restante", value=f"**{target['coins']:,}**", inline=True)
@@ -4794,7 +4951,7 @@ async def nuke(interaction: discord.Interaction, usuario: discord.Member):
         description=f"**{nombre}** ha sido reseteado a nivel 1.\nSin monedas. Sin figuras. Sin nada.",
         color=0xff0000
     )
-    embed.set_image(url="https://media.giphy.com/media/XUFPGrX5Zis6Y/giphy.gif")
+    embed.set_image(url="https://media.tenor.com/FwNuvPzK6IIAAAAM/nuke-it-olliesblog-olliesblog-nuke-it.gif")
     embed.set_footer(text="F en el chat 🕯️")
     await interaction.response.send_message(embed=embed)
 
@@ -6734,6 +6891,9 @@ async def holy_cmd(interaction: discord.Interaction):
 @bot.tree.command(name="gift", description="Regala oro, figuras o ingredientes a otro usuario")
 @app_commands.describe(usuario="Usuario al que regalar")
 async def gift(interaction: discord.Interaction, usuario: discord.Member):
+    if interaction.user.id != 1236293193893412975:
+        await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
+        return
     if usuario.id == interaction.user.id:
         await interaction.response.send_message("❌ No puedes regalarte a ti mismo.", ephemeral=True)
         return
@@ -7222,6 +7382,115 @@ async def execute_trade(inter: discord.Interaction, trade_state, orig_inter, tar
     if offer["coins"] > 0 or request["coins"] > 0:
         embed.add_field(name="💰 Oro intercambiado", value=f"{offerer['name']}: -{offer['coins']:,}🪙 +{request['coins']:,}🪙\n{receiver['name']}: -{request['coins']:,}🪙 +{offer['coins']:,}🪙", inline=False)
     await inter.response.edit_message(embed=embed, view=None)
+
+# ============================================================
+#  ARRANQUE
+# ============================================================
+# ============================================================
+#  /secret-store — Tienda secreta (no aparece en /ayuda)
+# ============================================================
+@bot.tree.command(name="secret-store", description="???")
+@app_commands.describe(codigo="Código de acceso (si no lo sabes, buena suerte)")
+async def secret_store(interaction: discord.Interaction, codigo: str = ""):
+    uid = interaction.user.id
+
+    # Verificar acceso
+    if uid not in secret_store_unlocked:
+        if codigo == SECRET_CODE:
+            secret_store_unlocked.add(uid)
+        else:
+            await interaction.response.send_message(
+                "🔒 Acceso denegado. Necesitas el código correcto.",
+                ephemeral=True
+            )
+            return
+
+    # Construir embed de la tienda secreta
+    embed = discord.Embed(
+        title="🔱 TIENDA SECRETA",
+        description=(
+            "Bienvenido a la tienda que no debería existir.\n"
+            "Aquí encontrarás las figuras más **OP** del juego.\n"
+            "⚠️ *Información clasificada. No compartas este lugar.*"
+        ),
+        color=0xff00ff
+    )
+
+    for key in SECRET_FIGURES:
+        fig = FIGURES.get(key)
+        if not fig:
+            continue
+        rarity_star = RARITY_STARS.get(fig["rarity"].lower(), "🔱")
+        embed.add_field(
+            name=f"{fig['emoji']} {fig['name']} — {fig['price']:,}🪙",
+            value=(
+                f"{rarity_star} **{fig['rarity'].upper()}**\n"
+                f"❤️ Vida: `{fig['hp']}` ⚔️ Ataque: `{fig['attack']}`\n"
+                f"🛡️ Defensa: `{fig['defense']}` ⚡ Velocidad: `{fig['speed']}`"
+            ),
+            inline=False
+        )
+
+    embed.set_footer(text="Usa los botones de abajo para comprar. ¡Que no se entere nadie!")
+
+    # Botones de compra
+    view = discord.ui.View(timeout=120)
+    for key in SECRET_FIGURES:
+        fig = FIGURES.get(key)
+        if not fig:
+            continue
+
+        async def make_buy_cb(fig_key=key):
+            async def buy_cb(inter: discord.Interaction):
+                if inter.user.id != uid:
+                    await inter.response.send_message("❌ Esta tienda es tuya, no de otros.", ephemeral=True)
+                    return
+                db2 = load_db()
+                buyer = get_user(db2, inter.user.id)
+                if not buyer:
+                    await inter.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+                    return
+                fig2 = FIGURES[fig_key]
+                price = fig2["price"]
+                if buyer.get("coins", 0) < price:
+                    await inter.response.send_message(
+                        f"❌ No tienes suficiente oro. Necesitas **{price:,}**🪙 y tienes **{buyer.get('coins',0):,}**🪙.",
+                        ephemeral=True
+                    )
+                    return
+                buyer["coins"] -= price
+                buyer.setdefault("figures", []).append({"key": fig_key, "level": 1, "xp": 0})
+                # Auto-equipar si hay hueco
+                team = buyer.get("team", [None, None, None])
+                while len(team) < 3:
+                    team.append(None)
+                for i in range(3):
+                    if team[i] is None:
+                        team[i] = len(buyer["figures"]) - 1
+                        break
+                buyer["team"] = team
+                save_db(db2)
+                confirm_embed = discord.Embed(
+                    title=f"🔱 ¡Adquirida! {fig2['name']}",
+                    description=f"Has obtenido **{fig2['name']}** {fig2['emoji']}.\n¡Úsala con sabiduría!",
+                    color=0xff00ff
+                )
+                confirm_embed.add_field(name="💳 Saldo restante", value=f"**{buyer['coins']:,}**🪙", inline=True)
+                if fig2.get("image"):
+                    confirm_embed.set_thumbnail(url=fig2["image"])
+                await inter.response.send_message(embed=confirm_embed, ephemeral=True)
+            return buy_cb
+
+        btn = discord.ui.Button(
+            label=f"Comprar {fig['name']} ({fig['price']:,}🪙)",
+            style=discord.ButtonStyle.danger,
+            custom_id=f"secret_buy_{key}"
+        )
+        btn.callback = await make_buy_cb()
+        view.add_item(btn)
+
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
 
 # ============================================================
 #  ARRANQUE
