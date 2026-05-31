@@ -99,12 +99,17 @@ def create_user(db, user_id, display_name):
     db["users"][uid] = {
         "name": display_name,
         "coins": 1000,
-        "figures": [],       # lista de figuras que posee (pueden repetirse)
-        "team": [None, None, None],  # equipo de 3 posiciones
+        "figures": [],
+        "team": [None, None, None],
         "wins": 0,
         "losses": 0,
         "level": 1,
-        "xp": 0
+        "xp": 0,
+        "skill_points": 0,
+        "learn_tree": {},      # nodo_id: nivel_actual (0-max)
+        "rebirth_count": 0,
+        "recipe_count": 0,
+        "combine_upgrades": {},
     }
     save_db(db)
     return db["users"][uid]
@@ -195,7 +200,7 @@ FIGURES = {
     "chicken": {
         "name": "Shedletsky",
         "emoji": "🐔",
-        "rarity": "legendario",
+        "rarity": "mítico",
         "price": 2006,
         "hp": 210,
         "attack": 45,
@@ -206,12 +211,12 @@ FIGURES = {
     "blackout": {
         "name": "Black Impostor",
         "emoji": "🔪",
-        "rarity": "legendario",
+        "rarity": "mítico",
         "price": 2021,
-        "hp": 235,
-        "attack": 40,
-        "defense": 30,
-        "speed": 25,
+        "hp": 275,
+        "attack": 52,
+        "defense": 38,
+        "speed": 35,
         "image": "https://static.wikia.nocookie.net/the-ultimate-evil/images/b/bc/Black_Impostor_FINALE_V4.png/revision/latest/scale-to-width/360?cb=20230309224128",
     },
     "santa_vaca": {
@@ -357,6 +362,18 @@ FIGURES = {
         "defense": 40,
         "speed": 41,
         "image": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQitxgXjvgIbadMnhQmNWfrG9uAdy7UC4Th_g&s",
+    },
+    "kirby": {
+        "name": "Kirby",
+        "emoji": "🌸",
+        "rarity": "legendario",
+        "price": 1992,
+        "hp": 245,
+        "attack": 35,
+        "defense": 28,
+        "speed": 45,
+        "image": "https://upload.wikimedia.org/wikipedia/en/e/e5/Kirby_%28character%29.png",
+        "passive": "kirby_transform",
     },
     # ── FIGURAS SECRETAS (solo en /secret-store) ─────────────────
     "og_gamer64": {
@@ -669,25 +686,25 @@ FIGURE_SKILLS = {
             "name": "Chase Up",
             "cost": 30,
             "type": "drain",
-            "power": 10,           # se daña 10 HP
-            "bar_bonus": 30,       # recarga la barra extra
-            "desc": "El Impostor recarga su barra de carga a costa de 10 HP.",
+            "power": 10,
+            "bar_bonus": 60,
+            "desc": "Black se acuchilla a sí mismo, para crear beneficio en el futuro... -10 HP al impostor, +60 de barra.",
         },
         {
             "name": "Fast Kill",
             "cost": 60,
-            "type": "fast_kill",   # requiere 3 usos seguidos
-            "power": 50,
+            "type": "fast_kill",
+            "power": 60,
             "charges_needed": 3,
-            "desc": "El Impostor se acerca y clava su cuchillo. Úsalo 3 turnos seguidos para activarlo.",
+            "desc": "Black agarra su cuchillo, apunta a una figura, se concentra y da un ataque fuerte... Úsalo 3 turnos seguidos para activarlo. 60 de daño.",
         },
         {
             "name": "Consumed By Fury",
             "cost": 100,
-            "type": "consumed_fury",  # mata activa + 15 a otras + impostor muere
+            "type": "consumed_fury",
             "power": 0,
-            "splash_dmg": 15,
-            "desc": "El Impostor se avalanza, mata a la figura activa enemiga, hace 15 a las otras 2 y luego explota.",
+            "splash_dmg": 40,
+            "desc": "...Ya estoy harto de ustedes... Es hora de acabar esto... Mata a la figura activa enemiga, +40 de daño a las otras 2. Black muere directamente.",
         },
     ],
     "santa_vaca": [
@@ -1057,14 +1074,17 @@ ENERGY_PER_TURN = 20
 ENERGY_MAX = 100
 
 def make_fighter(fig_key, owner_fig_data, hp_mult=1.0, atk_mult=1.0, energy_bonus=0):
-    """Crea un luchador con HP, energía y habilidades listas.
-    hp_mult/atk_mult: multiplicadores para jefes más difíciles.
-    energy_bonus: energía extra por turno para jefes más difíciles.
-    """
+    """Crea un luchador con HP, energía y habilidades listas."""
     fig = FIGURES[fig_key]
     lvl = owner_fig_data.get("level", 1)
-    base_hp  = int(apply_level_bonus(fig["hp"],     lvl) * hp_mult)
-    base_atk = int(apply_level_bonus(fig["attack"],  lvl) * atk_mult)
+    su  = owner_fig_data.get("stat_ups", {})  # bonuses elegidos al subir nivel
+
+    base_hp  = int((apply_level_bonus(fig["hp"],     lvl) + su.get("hp", 0))  * hp_mult)
+    base_atk = int((apply_level_bonus(fig["attack"],  lvl) + su.get("attack", 0)) * atk_mult)
+    base_def = apply_level_bonus(fig["defense"], lvl)
+    base_spd = fig.get("speed", 0) + su.get("speed", 0)
+    energy_cap = ENERGY_MAX + su.get("energy_cap", 0)  # barra de carga ampliada
+
     fighter = {
         "key":          fig_key,
         "name":         fig["name"],
@@ -1072,12 +1092,15 @@ def make_fighter(fig_key, owner_fig_data, hp_mult=1.0, atk_mult=1.0, energy_bonu
         "hp":           base_hp,
         "max_hp":       base_hp,
         "atk":          base_atk,
-        "defense":      apply_level_bonus(fig["defense"], lvl),
+        "defense":      base_def,
+        "speed":        base_spd,
         "level":        lvl,
         "energy":       0,
-        "energy_bonus": energy_bonus,   # energía extra por turno
+        "energy_cap":   energy_cap,
+        "energy_bonus": energy_bonus,
         "skills":       FIGURE_SKILLS.get(fig_key, FIGURE_SKILLS["gamer64"]),
         "image":        fig.get("image", ""),
+        "skill_upgrades": owner_fig_data.get("skill_upgrades_by_idx", {}),
     }
     # Pasiva de Gamer64: revive una vez con el 80% de su HP máximo
     if fig_key == "gamer64":
@@ -1176,10 +1199,14 @@ class BattleState:
         return any(f["hp"] > 0 for f in team)
 
     def tick_locks(self):
-        """Reduce el contador force_locked de todas las figuras al inicio de cada turno."""
+        """Reduce el contador force_locked y absorbed_turns al inicio de cada turno."""
         for fig in self.p1_team + self.p2_team:
             if fig.get("force_locked", 0) > 0:
                 fig["force_locked"] -= 1
+            if fig.get("absorbed_turns", 0) > 0:
+                fig["absorbed_turns"] -= 1
+                if fig["absorbed_turns"] == 0:
+                    self.log.append(f"🌸 ¡**{fig['emoji']} {fig['name']}** regresa al campo después de ser absorbida por Kirby!")
 
     def get_embed(self, title="⚔️ BATALLA"):
         f1 = self.current_p1()
@@ -1567,12 +1594,28 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
         stype = skill["type"]
 
         if stype == "damage":
+            # Bonus de combine (skill_upgrades)
+            skill_upgrades = {}
+            # Encontrar el índice real de esta habilidad para ver si tiene upgrade
+            try:
+                base_skills = FIGURE_SKILLS.get(attacker.get("key",""), [])
+                real_skill_idx = next((i for i, sk in enumerate(base_skills) if sk.get("name") == skill.get("name")), None)
+                # tier = 0→habilidad 0, 1→habilidad 1, 2→habilidad 2
+                if real_skill_idx is not None:
+                    # Recuperar skill_upgrades desde el estado de batalla (no disponible aquí directamente)
+                    # Se pasa como atributo del fighter si se cargó al crear
+                    su_bonus = attacker.get("skill_upgrades", {}).get(str(real_skill_idx), 0)
+                else:
+                    su_bonus = 0
+            except Exception:
+                su_bonus = 0
+
             # Aplicar buff de ATK temporal si existe (Carga Estelar de Alex)
             bonus_atk = attacker.pop("atk_buff", 0)
             # Bonus si el defensor está enredado
             entangle_bonus = 15 if defender.get("entangled") else 0
             effective_atk = attacker["atk"] + bonus_atk + entangle_bonus
-            dmg = battle.calc_damage(effective_atk, defender["defense"], skill["power"])
+            dmg = battle.calc_damage(effective_atk, defender["defense"], skill["power"] + su_bonus)
             # Apple Armor: reduce el daño recibido
             if defender.get("apple_armor_turns", 0) > 0:
                 reduction = defender.get("apple_armor_reduction", 0.5)
@@ -2576,6 +2619,58 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 battle.log.append(f"   💥 Daño de explosión a aliados: {', '.join(splashed)}")
             battle.log.append(f"   💀 **{attacker['name']}** también cae en la explosión...")
 
+        elif stype == "kirby_absorb":
+            defender["absorbed_turns"] = 2
+            absorbed_key    = defender.get("key", "")
+            absorbed_skills = FIGURE_SKILLS.get(absorbed_key, [])
+            if absorbed_key == "og_gamer64":
+                absorbed_skills = [sk for sk in absorbed_skills if sk.get("phase", 1) == defender.get("og_phase", 1)]
+            attacker["kirby_original_skills"] = list(KIRBY_DEFAULT_SKILLS)
+            attacker["kirby_absorbed_from"]   = absorbed_key
+            transformed_skills = [KIRBY_TRANSFORMED_SLOT0]
+            costs = [40, 60, 100]
+            for i, sk in enumerate(absorbed_skills[:3]):
+                copied = dict(sk)
+                copied["cost"] = costs[i]
+                transformed_skills.append(copied)
+            attacker["skills"] = transformed_skills
+            def_team     = battle.p2_team if battle.turn == 1 else battle.p1_team
+            def_idx_attr = "p2_active" if battle.turn == 1 else "p1_active"
+            swapped = False
+            for i, fig in enumerate(def_team):
+                if fig is not defender and fig["hp"] > 0:
+                    setattr(battle, def_idx_attr, i)
+                    battle.log.append(f"🌸 **Kirby** absorbe a **{defender['emoji']} {defender['name']}**!")
+                    battle.log.append(f"   😵 {defender['name']} desaparece **2 turnos** y Kirby copia sus habilidades!")
+                    battle.log.append(f"   🔄 Entra **{fig['emoji']} {fig['name']}** en su lugar.")
+                    swapped = True
+                    break
+            if not swapped:
+                battle.log.append(f"🌸 **Kirby** absorbe a **{defender['emoji']} {defender['name']}**!")
+                battle.log.append(f"   😵 {defender['name']} desaparece **2 turnos** y Kirby copia sus habilidades!")
+
+        elif stype == "kirby_spit":
+            attacker["skills"] = list(KIRBY_DEFAULT_SKILLS)
+            attacker.pop("kirby_absorbed_from", None)
+            attacker.pop("kirby_original_skills", None)
+            battle.log.append(f"🌸 **Kirby** escupe la habilidad absorbida y vuelve a sus poderes originales!")
+
+        elif stype == "kirby_flamethrower":
+            dot_dmg  = skill.get("dot_power", 6)
+            dot_t    = skill.get("dot_turns", 8)
+            def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+            hit = []
+            for fig in def_team:
+                if fig["hp"] > 0:
+                    dmg = battle.calc_damage(attacker["atk"], fig["defense"], skill.get("power", 20))
+                    fig["hp"] = max(0, fig["hp"] - dmg)
+                    fig.setdefault("dots", []).append({"dmg": dot_dmg, "turns": dot_t})
+                    hit.append(f"{fig['emoji']} {fig['name']} -{dmg}HP🔥")
+            battle.log.append(f"🔥 **Kirby** echa llamas sobre todos los enemigos!")
+            if hit:
+                battle.log.append(f"   {' · '.join(hit)}")
+            battle.log.append(f"   ☠️ Burning {dot_dmg}/turno por {dot_t} turnos!")
+
     # ¿Cayó el defensor?
     if defender["hp"] <= 0:
         # Pasiva de Gamer64: revive una vez con 80% HP
@@ -3263,12 +3358,30 @@ async def perfil(interaction: discord.Interaction, usuario: discord.Member = Non
         color=0x3498db
     )
     embed.set_thumbnail(url=target_member.display_avatar.url)
-    embed.add_field(name="💰 Monedas", value=f"{user['coins']:,}", inline=True)
-    embed.add_field(name="🏆 Nivel", value=user.get("level", 1), inline=True)
-    embed.add_field(name="⚡ XP", value=f"{user.get('xp',0)}/{xp_to_level_up(user.get('level',1))}", inline=True)
-    embed.add_field(name="✅ Victorias", value=user.get("wins", 0), inline=True)
-    embed.add_field(name="❌ Derrotas", value=user.get("losses", 0), inline=True)
-    embed.add_field(name="🎭 Figuras", value=len(user.get("figures", [])), inline=True)
+
+    lvl    = user.get("level", 1)
+    xp     = user.get("xp", 0)
+    sp     = user.get("skill_points", 0)
+    rb     = user.get("rebirth_count", 0)
+    rc     = user.get("recipe_count", 0)
+
+    rebirth_str = f"🔄 **×{rb}**" if rb > 0 else "—"
+    embed.add_field(name="💰 Monedas",      value=f"{user['coins']:,}",               inline=True)
+    embed.add_field(name="🏆 Nivel",         value=f"{lvl}",                           inline=True)
+    embed.add_field(name="⚡ XP",            value=f"{xp}/{xp_to_level_up(lvl)}",      inline=True)
+    embed.add_field(name="✨ Skill Points",  value=f"**{sp}** SP disponibles",         inline=True)
+    embed.add_field(name="🔄 Rebirths",      value=rebirth_str,                        inline=True)
+    embed.add_field(name="🧑‍🍳 Recetas",      value=f"{rc} descubiertas",               inline=True)
+    embed.add_field(name="✅ Victorias",     value=user.get("wins", 0),                inline=True)
+    embed.add_field(name="❌ Derrotas",      value=user.get("losses", 0),              inline=True)
+    embed.add_field(name="🎭 Figuras",       value=len(user.get("figures", [])),        inline=True)
+
+    # Nodos activos del árbol
+    tree = user.get("learn_tree", {})
+    active_nodes = [nid for nid, lvl in tree.items() if lvl > 0]
+    if active_nodes:
+        node_names = [LEARN_TREE.get(nid, {}).get("name", nid) for nid in active_nodes]
+        embed.add_field(name="📚 Árbol de aprendizaje", value=", ".join(node_names), inline=False)
 
     active = user.get("active_figure")
     if active:
@@ -3995,11 +4108,54 @@ _roblox_skills = [
 FIGURE_SKILLS["roblox"] = _roblox_skills
 FIGURE_SKILLS["roblox_boss"] = _roblox_skills
 
+# ── KIRBY ───────────────────────────────────────────────────────
+KIRBY_DEFAULT_SKILLS = [
+    {
+        "name": "Absorb",
+        "cost": 10,
+        "type": "kirby_absorb",
+        "power": 0,
+        "desc": "Kirby absorbe a la figura del oponente. Desaparece 2 turnos y Kirby copia sus habilidades.",
+    },
+    {
+        "name": "Sword Slash",
+        "cost": 40,
+        "type": "damage",
+        "power": 20,
+        "aoe": True,
+        "aoe_secondary_power": 5,
+        "desc": "Kirby vuela y se lanza al oponente. 20 de daño directo y 5 a las otras figuras enemigas.",
+    },
+    {
+        "name": "Stone Crush",
+        "cost": 60,
+        "type": "damage",
+        "power": 40,
+        "desc": "Kirby se transforma en piedra y aplasta al oponente. 40 de daño.",
+    },
+    {
+        "name": "Flamethrower",
+        "cost": 100,
+        "type": "kirby_flamethrower",
+        "power": 20,
+        "dot_turns": 8,
+        "dot_power": 6,
+        "desc": "Kirby escupe fuego sobre todos los enemigos. 20 de daño + burning 8 turnos a todos.",
+    },
+]
+KIRBY_TRANSFORMED_SLOT0 = {
+    "name": "Spit",
+    "cost": 10,
+    "type": "kirby_spit",
+    "power": 0,
+    "desc": "Kirby escupe la habilidad absorbida y regresa a sus habilidades por defecto.",
+}
+FIGURE_SKILLS["kirby"] = list(KIRBY_DEFAULT_SKILLS)
+
 # ── OG GAMER 64 — habilidades por fase ─────────────────────────
 # Las habilidades cambian según la fase activa (1-4).
 # La pasiva "og_gamer_phases" controla la revivificación con cambio de fase.
 FIGURE_SKILLS["og_gamer64"] = [
-    # ── FASE 1 ──────────────────────────────────────────────────
     {
         "name": "Heroic Pose",
         "cost": 30,
@@ -4725,6 +4881,22 @@ def build_leaderboard_embed(users: dict, category: str) -> discord.Embed:
         def row(u):
             lvls = [f.get("level",1) for f in u.get("figures",[])]
             return f"⬆️ Niveles totales: **{sum(lvls)}** | Máx: **{max(lvls) if lvls else 0}**"
+
+    elif category == "recipes":
+        title = "🧑‍🍳 Leaderboard — Recetas"
+        color = 0xe67e22
+        sorted_u = sorted(users.values(), key=lambda u: u.get("recipe_count",0), reverse=True)[:10]
+        def row(u): return f"🧑‍🍳 **{u.get('recipe_count',0)}** recetas descubiertas"
+
+    elif category == "playerlevel":
+        title = "🏆 Leaderboard — Nivel de Jugador"
+        color = 0x3498db
+        sorted_u = sorted(users.values(), key=lambda u: u.get("rebirth_count",0)*1000 + u.get("level",1), reverse=True)[:10]
+        def row(u):
+            rb  = u.get("rebirth_count", 0)
+            lvl = u.get("level", 1)
+            rb_str = f" 🔄×{rb}" if rb > 0 else ""
+            return f"🏆 Nivel **{lvl}**{rb_str} · SP: {u.get('skill_points',0)}"
     else:
         return discord.Embed(title="❌ Categoría desconocida", color=0xe74c3c)
 
@@ -4749,7 +4921,7 @@ async def ranking(interaction: discord.Interaction):
     async def send_lb(inter: discord.Interaction, category: str, edit=False):
         embed = build_leaderboard_embed(users, category)
         view = discord.ui.View(timeout=120)
-        cats = [("wins","🏆 Victorias"),("coins","💰 Dinero"),("figures","🎭 Figuras"),("fig_level","⬆️ Niveles")]
+        cats = [("wins","🏆 Victorias"),("coins","💰 Dinero"),("figures","🎭 Figuras"),("fig_level","⬆️ Niveles"),("recipes","🧑‍🍳 Recetas"),("playerlevel","🏆 Niv. Jugador")]
         for cat_id, cat_label in cats:
             btn = discord.ui.Button(
                 label=cat_label,
@@ -4879,6 +5051,9 @@ async def diario(interaction: discord.Interaction):
             if not user.get("active_figure"):
                 user["active_figure"] = figure_won
 
+    # XP al jugador por reclamar el diario
+    user["xp"] = user.get("xp", 0) + 10 * streak  # más XP cuanto mayor es la racha
+    _check_player_levelup(user)
     save_db(db)
 
     # Embed principal
@@ -5728,6 +5903,9 @@ async def cook_cmd(interaction: discord.Interaction):
                                 break
                 global_recipe_count += 1
                 user2["recipe_count"] = user2.get("recipe_count", 0) + 1
+                # XP al jugador por cocinar
+                user2["xp"] = user2.get("xp", 0) + 20
+                _check_player_levelup(user2)
                 if matched:
                     if "buffs" not in user2:
                         user2["buffs"] = []
@@ -5931,7 +6109,7 @@ def _make_stat_up_view(fig_data: dict, fig_key: str, user_data: dict, user_id: i
 # ============================================================
 #  SISTEMA DE LEVEL UP CON ELECCIÓN DE STAT (figuras)
 # ============================================================
-FIGURE_LEVEL_MAX = 50
+FIGURE_LEVEL_MAX = 30
 
 def check_figure_levelup(fig_data, interaction_hook=None):
     """
@@ -5944,8 +6122,6 @@ def check_figure_levelup(fig_data, interaction_hook=None):
         if fig_data.get("xp", 0) >= needed:
             fig_data["xp"] -= needed
             fig_data["level"] = fig_data.get("level", 1) + 1
-            if "pending_stat_up" not in fig_data:
-                fig_data["pending_stat_up"] = 0
             fig_data["pending_stat_up"] = fig_data.get("pending_stat_up", 0) + 1
             leveled = True
         else:
@@ -5953,25 +6129,33 @@ def check_figure_levelup(fig_data, interaction_hook=None):
     return leveled
 
 async def prompt_stat_up(interaction: discord.Interaction, fig_data: dict, fig_key: str, db):
-    """Muestra un menú para elegir qué stat subir (+2) al subir de nivel."""
+    """Muestra un menú para elegir qué stat subir al subir de nivel."""
     pending = fig_data.get("pending_stat_up", 0)
     if pending <= 0:
         return
-    fig_base = FIGURES.get(fig_key, {})
-    fig_name = fig_base.get("name", fig_key)
+    fig_base  = FIGURES.get(fig_key, {})
+    fig_name  = fig_base.get("name", fig_key)
     fig_emoji = fig_base.get("emoji", "🎭")
     lvl = fig_data.get("level", 1)
 
     embed = discord.Embed(
         title=f"⬆️ ¡{fig_emoji} {fig_name} subió al nivel {lvl}!",
-        description="Elige **qué stat subir +2**:",
+        description="Elige **una mejora permanente**:",
         color=0xf1c40f
     )
+
+    # Opciones: +10 HP | +5 ATK | +5 VEL | +10 Barra de carga
+    STAT_OPTIONS = [
+        ("hp",         "❤️ +10 Vida",          "hp",      10),
+        ("attack",     "⚔️ +5 Ataque",          "attack",  5),
+        ("speed",      "⚡ +5 Velocidad",        "speed",   5),
+        ("energy_cap", "🔋 +10 Barra de carga", "energy_cap", 10),
+    ]
+
     view = discord.ui.View(timeout=60)
-    stats = [("hp", "❤️ HP"), ("attack", "⚔️ ATK"), ("defense", "🛡️ DEF"), ("speed", "⚡ VEL")]
     user_id = interaction.user.id
 
-    async def make_callback(stat_key, stat_label):
+    async def make_callback(stat_key, stat_label, stat_field, stat_amt):
         async def callback(inter: discord.Interaction):
             if inter.user.id != user_id:
                 await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
@@ -5981,31 +6165,29 @@ async def prompt_stat_up(interaction: discord.Interaction, fig_data: dict, fig_k
             if not u2:
                 await inter.response.send_message("❌ Error al cargar tu perfil.", ephemeral=True)
                 return
-            # Encontrar la figura correcta
             target = next((f for f in u2.get("figures", []) if f.get("key") == fig_key and f.get("pending_stat_up", 0) > 0), None)
             if not target:
                 await inter.response.edit_message(content="✅ Ya fue procesado.", embed=None, view=None)
                 return
             if "stat_ups" not in target:
                 target["stat_ups"] = {}
-            target["stat_ups"][stat_key] = target["stat_ups"].get(stat_key, 0) + 2
+            target["stat_ups"][stat_field] = target["stat_ups"].get(stat_field, 0) + stat_amt
             target["pending_stat_up"] = target.get("pending_stat_up", 0) - 1
             save_db(db2)
             result_embed = discord.Embed(
-                title=f"✅ {fig_emoji} {fig_name} — stat mejorado",
-                description=f"**{stat_label} +2** permanente! (Nv.{target.get('level',1)})",
+                title=f"✅ {fig_emoji} {fig_name} — ¡Mejora aplicada!",
+                description=f"**{stat_label}** permanente! (Nv.{target.get('level',1)})\nTotal bonus {stat_field}: **+{target['stat_ups'].get(stat_field,0)}**",
                 color=0x2ecc71
             )
             await inter.response.edit_message(embed=result_embed, view=None)
-            # Si quedan más pending, volver a preguntar
             if target.get("pending_stat_up", 0) > 0:
                 await asyncio.sleep(1)
                 await prompt_stat_up(inter, target, fig_key, db2)
         return callback
 
-    for stat_key, stat_label in stats:
+    for stat_key, stat_label, stat_field, stat_amt in STAT_OPTIONS:
         btn = discord.ui.Button(label=stat_label, style=discord.ButtonStyle.primary)
-        btn.callback = await make_callback(stat_key, stat_label)
+        btn.callback = await make_callback(stat_key, stat_label, stat_field, stat_amt)
         view.add_item(btn)
 
     try:
@@ -6079,20 +6261,47 @@ async def leaderboard_cmd(interaction: discord.Interaction):
                         inline=False
                     )
 
+            elif lb_type == "recipes":
+                sorted_u = sorted(users, key=lambda x: x[1].get("recipe_count", 0), reverse=True)[:10]
+                embed = discord.Embed(title="🧑‍🍳 Top Cocineros", color=0xe67e22)
+                for i, (uid, u) in enumerate(sorted_u):
+                    embed.add_field(
+                        name=f"{medals[i]} {u['name']}",
+                        value=f"🧑‍🍳 **{u.get('recipe_count', 0)}** recetas descubiertas",
+                        inline=False
+                    )
+
+            elif lb_type == "playerlevel":
+                sorted_u = sorted(users, key=lambda x: (x[1].get("rebirth_count", 0) * 1000 + x[1].get("level", 1)), reverse=True)[:10]
+                embed = discord.Embed(title="🏆 Top Nivel de Jugador", color=0x3498db)
+                for i, (uid, u) in enumerate(sorted_u):
+                    rb  = u.get("rebirth_count", 0)
+                    lvl = u.get("level", 1)
+                    rb_str = f" 🔄×{rb}" if rb > 0 else ""
+                    embed.add_field(
+                        name=f"{medals[i]} {u['name']}",
+                        value=f"🏆 Nivel **{lvl}**{rb_str} | SP: {u.get('skill_points', 0)}",
+                        inline=False
+                    )
+
             await inter.response.edit_message(embed=embed, view=view)
         return callback
 
-    btn_wins    = discord.ui.Button(label="🏆 Victorias",   style=discord.ButtonStyle.primary)
-    btn_coins   = discord.ui.Button(label="💰 Riqueza",     style=discord.ButtonStyle.primary)
-    btn_figs    = discord.ui.Button(label="🎭 Figuras",     style=discord.ButtonStyle.primary)
-    btn_levels  = discord.ui.Button(label="⬆️ Niv. Figs",  style=discord.ButtonStyle.primary)
+    btn_wins    = discord.ui.Button(label="🏆 Victorias",     style=discord.ButtonStyle.primary)
+    btn_coins   = discord.ui.Button(label="💰 Riqueza",       style=discord.ButtonStyle.primary)
+    btn_figs    = discord.ui.Button(label="🎭 Figuras",       style=discord.ButtonStyle.primary)
+    btn_levels  = discord.ui.Button(label="⬆️ Niv. Figs",    style=discord.ButtonStyle.primary)
+    btn_recipes = discord.ui.Button(label="🧑‍🍳 Recetas",      style=discord.ButtonStyle.primary)
+    btn_plvl    = discord.ui.Button(label="🏆 Niv. Jugador", style=discord.ButtonStyle.primary)
 
-    btn_wins.callback   = await make_lb_callback("wins")
-    btn_coins.callback  = await make_lb_callback("coins")
-    btn_figs.callback   = await make_lb_callback("figures")
-    btn_levels.callback = await make_lb_callback("figlevels")
+    btn_wins.callback    = await make_lb_callback("wins")
+    btn_coins.callback   = await make_lb_callback("coins")
+    btn_figs.callback    = await make_lb_callback("figures")
+    btn_levels.callback  = await make_lb_callback("figlevels")
+    btn_recipes.callback = await make_lb_callback("recipes")
+    btn_plvl.callback    = await make_lb_callback("playerlevel")
 
-    for btn in [btn_wins, btn_coins, btn_figs, btn_levels]:
+    for btn in [btn_wins, btn_coins, btn_figs, btn_levels, btn_recipes, btn_plvl]:
         view.add_item(btn)
 
     db = load_db()
@@ -6363,8 +6572,11 @@ async def exploracion_cmd(interaction: discord.Interaction):
                 if fd.get("key") == fig_key:
                     fd["xp"] = fd.get("xp", 0) + 60
                     if check_figure_levelup(fd):
-                        pass  # Se notificará al usuario al entrar al perfil
+                        pass
                     break
+        # XP al jugador por explorar
+        u2["xp"] = u2.get("xp", 0) + 30
+        _check_player_levelup(u2)
         u2["exploration"] = None
         save_db(db2)
         embed = discord.Embed(
@@ -7593,6 +7805,827 @@ async def execute_trade(inter: discord.Interaction, trade_state, orig_inter, tar
 # ============================================================
 #  ARRANQUE
 # ============================================================
+# ============================================================
+#  NIVEL DEL JUGADOR — helper
+# ============================================================
+PLAYER_LEVEL_MAX = 100
+
+def _check_player_levelup(user_data: dict) -> list[int]:
+    """Sube el nivel del jugador. Por cada nivel nuevo da 1 skill point."""
+    new_levels = []
+    while user_data.get("level", 1) < PLAYER_LEVEL_MAX:
+        needed = xp_to_level_up(user_data.get("level", 1))
+        if user_data.get("xp", 0) >= needed:
+            user_data["xp"] -= needed
+            user_data["level"] = user_data.get("level", 1) + 1
+            user_data["skill_points"] = user_data.get("skill_points", 0) + 1
+            new_levels.append(user_data["level"])
+        else:
+            break
+    return new_levels
+
+# ============================================================
+#  ÁRBOL DE APRENDIZAJE (SKILL POINTS)
+# ============================================================
+# Estructura: id -> {name, desc, max_level, cost_per_level, rama, requires, effect_key, effect_per_level}
+# effect aplicado en tiempo de ejecución según effect_key
+LEARN_TREE = {
+    # ── RAMA ORO ─────────────────────────────────────────────
+    "gold_1": {
+        "name": "💰 Buscador de Oro I",
+        "desc": "Ganas +15% más monedas en batallas y recompensas diarias.",
+        "rama": "💰 Oro",
+        "max_level": 3,
+        "cost": 1,          # SP por nivel
+        "requires": None,
+        "effect_key": "gold_bonus_pct",
+        "effect_per_level": 15,
+    },
+    "gold_2": {
+        "name": "💰 Mercader II",
+        "desc": "Descuento del 10% en la tienda por nivel.",
+        "rama": "💰 Oro",
+        "max_level": 3,
+        "cost": 2,
+        "requires": "gold_1",   # necesitas gold_1 al máximo
+        "effect_key": "shop_discount_pct",
+        "effect_per_level": 10,
+    },
+    "gold_3": {
+        "name": "💰 Magnate III",
+        "desc": "Ganas +1 moneda extra por cada punto de daño que haces en batalla.",
+        "rama": "💰 Oro",
+        "max_level": 2,
+        "cost": 3,
+        "requires": "gold_2",
+        "effect_key": "dmg_to_coins",
+        "effect_per_level": 1,
+    },
+    # ── RAMA XP ──────────────────────────────────────────────
+    "xp_1": {
+        "name": "📚 Estudiante I",
+        "desc": "+20% XP ganada en todas las acciones.",
+        "rama": "📚 Experiencia",
+        "max_level": 3,
+        "cost": 1,
+        "requires": None,
+        "effect_key": "xp_bonus_pct",
+        "effect_per_level": 20,
+    },
+    "xp_2": {
+        "name": "📚 Erudito II",
+        "desc": "Tus figuras también ganan +20% XP en batallas y exploraciones.",
+        "rama": "📚 Experiencia",
+        "max_level": 3,
+        "cost": 2,
+        "requires": "xp_1",
+        "effect_key": "fig_xp_bonus_pct",
+        "effect_per_level": 20,
+    },
+    "xp_3": {
+        "name": "📚 Maestro III",
+        "desc": "El tiempo de exploración se reduce un 20% por nivel.",
+        "rama": "📚 Experiencia",
+        "max_level": 2,
+        "cost": 3,
+        "requires": "xp_2",
+        "effect_key": "explore_time_reduction_pct",
+        "effect_per_level": 20,
+    },
+    # ── RAMA EXPLORACIÓN ─────────────────────────────────────
+    "explore_1": {
+        "name": "🗺️ Explorador I",
+        "desc": "+1 objeto garantizado por exploración.",
+        "rama": "🗺️ Exploración",
+        "max_level": 3,
+        "cost": 1,
+        "requires": None,
+        "effect_key": "explore_bonus_items",
+        "effect_per_level": 1,
+    },
+    "explore_2": {
+        "name": "🗺️ Rastreador II",
+        "desc": "+15% de probabilidad de conseguir figuras en exploraciones.",
+        "rama": "🗺️ Exploración",
+        "max_level": 2,
+        "cost": 2,
+        "requires": "explore_1",
+        "effect_key": "explore_fig_chance_bonus",
+        "effect_per_level": 15,
+    },
+    "explore_3": {
+        "name": "🗺️ Leyenda III",
+        "desc": "Posibilidad de encontrar figuras épicas/legendarias en exploración.",
+        "rama": "🗺️ Exploración",
+        "max_level": 1,
+        "cost": 4,
+        "requires": "explore_2",
+        "effect_key": "explore_rare_unlock",
+        "effect_per_level": 1,
+    },
+    # ── RAMA COCINA ──────────────────────────────────────────
+    "cook_1": {
+        "name": "🧑‍🍳 Aprendiz de Cocina I",
+        "desc": "+1 ingrediente de regalo al cocinar por nivel.",
+        "rama": "🧑‍🍳 Cocina",
+        "max_level": 2,
+        "cost": 1,
+        "requires": None,
+        "effect_key": "cook_bonus_ingredient",
+        "effect_per_level": 1,
+    },
+    "cook_2": {
+        "name": "🧑‍🍳 Chef II",
+        "desc": "50% de no consumir ingredientes al fallar una receta.",
+        "rama": "🧑‍🍳 Cocina",
+        "max_level": 1,
+        "cost": 3,
+        "requires": "cook_1",
+        "effect_key": "cook_fail_save",
+        "effect_per_level": 1,
+    },
+}
+
+def get_learn_effect(user_data: dict, effect_key: str) -> int:
+    """Devuelve el valor total de un efecto del árbol para un usuario."""
+    tree = user_data.get("learn_tree", {})
+    total = 0
+    for nid, node in LEARN_TREE.items():
+        if node["effect_key"] == effect_key:
+            lvl = tree.get(nid, 0)
+            total += lvl * node["effect_per_level"]
+    return total
+
+@bot.tree.command(name="learn", description="Gasta Skill Points para mejorar tu árbol de habilidades")
+async def learn_cmd(interaction: discord.Interaction):
+    db   = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    uid = interaction.user.id
+
+    def build_learn_embed(user_data):
+        sp   = user_data.get("skill_points", 0)
+        tree = user_data.get("learn_tree", {})
+        embed = discord.Embed(
+            title="📚 Árbol de Aprendizaje",
+            description=f"✨ **{sp} Skill Points** disponibles\nElige un nodo para invertir un SP.",
+            color=0x9b59b6
+        )
+        ramas = {}
+        for nid, node in LEARN_TREE.items():
+            ramas.setdefault(node["rama"], []).append((nid, node))
+        for rama, nodes in ramas.items():
+            lines = []
+            for nid, node in nodes:
+                cur = tree.get(nid, 0)
+                maxl = node["max_level"]
+                req  = node.get("requires")
+                req_met = (req is None) or (tree.get(req, 0) >= LEARN_TREE[req]["max_level"])
+                bars = "█" * cur + "░" * (maxl - cur)
+                lock = "🔒 " if not req_met else ("✅ " if cur >= maxl else "")
+                lines.append(f"{lock}**{node['name']}** [{bars}] {cur}/{maxl}\n_{node['desc']}_  *({node['cost']} SP/nv)*")
+            embed.add_field(name=rama, value="\n\n".join(lines), inline=False)
+        return embed
+
+    def build_learn_view(user_data):
+        sp   = user_data.get("skill_points", 0)
+        tree = user_data.get("learn_tree", {})
+        view = discord.ui.View(timeout=120)
+        for nid, node in LEARN_TREE.items():
+            cur  = tree.get(nid, 0)
+            req  = node.get("requires")
+            req_met = (req is None) or (tree.get(req, 0) >= LEARN_TREE[req]["max_level"])
+            maxed   = cur >= node["max_level"]
+            can_buy = req_met and not maxed and sp >= node["cost"]
+            btn = discord.ui.Button(
+                label=f"{node['name'].split(' ')[0]} Nv{cur+1}" if not maxed else f"✅ {node['name'].split(' ')[0]}",
+                style=discord.ButtonStyle.success if can_buy else discord.ButtonStyle.secondary,
+                disabled=not can_buy,
+                custom_id=f"learn_{nid}",
+                row=list(LEARN_TREE.keys()).index(nid) // 5
+            )
+            async def make_cb(node_id=nid, node_data=node):
+                async def cb(inter: discord.Interaction):
+                    if inter.user.id != uid:
+                        await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                        return
+                    db2   = load_db()
+                    u2    = get_user(db2, inter.user.id)
+                    sp2   = u2.get("skill_points", 0)
+                    tree2 = u2.setdefault("learn_tree", {})
+                    cur2  = tree2.get(node_id, 0)
+                    req2  = node_data.get("requires")
+                    req_met2 = (req2 is None) or (tree2.get(req2, 0) >= LEARN_TREE[req2]["max_level"])
+                    if not req_met2:
+                        await inter.response.send_message("❌ Desbloquea el nodo anterior primero.", ephemeral=True)
+                        return
+                    if cur2 >= node_data["max_level"]:
+                        await inter.response.send_message("❌ Este nodo ya está al máximo.", ephemeral=True)
+                        return
+                    if sp2 < node_data["cost"]:
+                        await inter.response.send_message(f"❌ Necesitas **{node_data['cost']} SP** y tienes **{sp2}**.", ephemeral=True)
+                        return
+                    u2["skill_points"] = sp2 - node_data["cost"]
+                    tree2[node_id] = cur2 + 1
+                    save_db(db2)
+                    await inter.response.edit_message(embed=build_learn_embed(u2), view=build_learn_view(u2))
+                return cb
+            btn.callback = await make_cb()
+            view.add_item(btn)
+        return view
+
+    await interaction.response.send_message(
+        embed=build_learn_embed(user),
+        view=build_learn_view(user),
+        ephemeral=True
+    )
+
+# ============================================================
+#  /rebirth — Reinicio con árbol preservado
+# ============================================================
+REBIRTH_BASE_COST = 40_000
+REBIRTH_COST_INC  = 20_000
+
+@bot.tree.command(name="rebirth", description="Reinicia desde el nivel 1, manteniendo tu árbol de aprendizaje")
+async def rebirth_cmd(interaction: discord.Interaction):
+    db   = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    rb_count = user.get("rebirth_count", 0)
+    cost     = REBIRTH_BASE_COST + rb_count * REBIRTH_COST_INC
+    coins    = user.get("coins", 0)
+    lvl      = user.get("level", 1)
+
+    embed = discord.Embed(
+        title="🔄 REBIRTH",
+        description=(
+            f"¿Estás seguro de que quieres hacer **Rebirth #{rb_count + 1}**?\n\n"
+            f"**Se reiniciará:**\n"
+            f"• Nivel → 1 · XP → 0\n"
+            f"• Skill Points no gastados → 0\n\n"
+            f"**Se conservará:**\n"
+            f"• Tu árbol de aprendizaje\n"
+            f"• Figuras · Monedas · Victorias\n\n"
+            f"💰 Coste: **{cost:,}🪙** | Tienes: **{coins:,}🪙**\n"
+            f"📈 Próximo rebirth costará: **{cost + REBIRTH_COST_INC:,}🪙**"
+        ),
+        color=0xe74c3c
+    )
+
+    if coins < cost:
+        embed.set_footer(text=f"❌ No tienes suficientes monedas. Te faltan {cost - coins:,}🪙.")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+
+    view = discord.ui.View(timeout=60)
+    uid  = interaction.user.id
+
+    confirm_btn = discord.ui.Button(label="✅ Confirmar Rebirth", style=discord.ButtonStyle.danger)
+    cancel_btn  = discord.ui.Button(label="❌ Cancelar",          style=discord.ButtonStyle.secondary)
+
+    async def confirm_cb(inter: discord.Interaction):
+        if inter.user.id != uid:
+            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+            return
+        db2  = load_db()
+        u2   = get_user(db2, inter.user.id)
+        cost2 = REBIRTH_BASE_COST + u2.get("rebirth_count", 0) * REBIRTH_COST_INC
+        if u2.get("coins", 0) < cost2:
+            await inter.response.edit_message(content="❌ Ya no tienes suficiente oro.", embed=None, view=None)
+            return
+        # Preservar
+        tree      = u2.get("learn_tree", {})
+        figures   = u2.get("figures", [])
+        team      = u2.get("team", [None, None, None])
+        wins      = u2.get("wins", 0)
+        losses    = u2.get("losses", 0)
+        rc        = u2.get("recipe_count", 0)
+        name      = u2.get("name", "")
+        active    = u2.get("active_figure")
+        rb_new    = u2.get("rebirth_count", 0) + 1
+        # Resetear
+        u2["level"]         = 1
+        u2["xp"]            = 0
+        u2["skill_points"]  = 0
+        u2["learn_tree"]    = tree       # árbol preservado
+        u2["figures"]       = figures
+        u2["team"]          = team
+        u2["wins"]          = wins
+        u2["losses"]        = losses
+        u2["recipe_count"]  = rc
+        u2["name"]          = name
+        u2["active_figure"] = active
+        u2["coins"]         = u2.get("coins", 0) - cost2
+        u2["rebirth_count"] = rb_new
+        save_db(db2)
+        ok_embed = discord.Embed(
+            title=f"🔄 ¡Rebirth #{rb_new} completado!",
+            description=(
+                f"Has reiniciado al nivel 1.\n"
+                f"Tu árbol de aprendizaje sigue intacto — ¡sigue creciendo!\n"
+                f"💰 Saldo restante: **{u2['coins']:,}🪙**"
+            ),
+            color=0xe74c3c
+        )
+        await inter.response.edit_message(embed=ok_embed, view=None)
+
+    async def cancel_cb(inter: discord.Interaction):
+        if inter.user.id != uid:
+            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+            return
+        await inter.response.edit_message(content="❌ Rebirth cancelado.", embed=None, view=None)
+
+    confirm_btn.callback = confirm_cb
+    cancel_btn.callback  = cancel_cb
+    view.add_item(confirm_btn)
+    view.add_item(cancel_btn)
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+# ============================================================
+#  /combine — Fusionar figuras del mismo tipo
+# ============================================================
+# Por cada 10 fusiones de la misma figura se mejora una habilidad (máx 3 mejoras = 30 fusiones)
+COMBINE_COST      = 200   # monedas por fusión
+COMBINE_BATCH     = 10    # fusiones para mejorar una habilidad
+COMBINE_MAX_TIERS = 3     # máximo de mejoras (3 habilidades)
+
+# Cuánto sube cada stat de cada habilidad mejorada (daño/curación/etc)
+SKILL_UPGRADE_BONUS = 15  # +15 de poder por tier
+
+@bot.tree.command(name="combine", description="Fusiona 10 copias de una figura para mejorar sus habilidades")
+async def combine_cmd(interaction: discord.Interaction):
+    db   = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    # Contar copias por tipo de figura
+    fig_counts: dict[str, int] = {}
+    for fd in user.get("figures", []):
+        k = fd.get("key")
+        if k:
+            fig_counts[k] = fig_counts.get(k, 0) + 1
+
+    # Sólo figuras con al menos 10 copias y que aún puedan mejorar
+    combine_upgrades = user.setdefault("combine_upgrades", {})
+    eligible = {
+        k: cnt for k, cnt in fig_counts.items()
+        if cnt >= COMBINE_BATCH and combine_upgrades.get(k, 0) < COMBINE_MAX_TIERS
+    }
+
+    if not eligible:
+        await interaction.response.send_message(
+            "❌ Necesitas al menos **10 copias** de una figura que aún pueda mejorar (máx 3 mejoras por figura).",
+            ephemeral=True
+        )
+        return
+
+    # Mostrar opciones
+    embed = discord.Embed(
+        title="🔀 Combinar Figuras",
+        description=(
+            f"Fusionar **10 copias** de una figura mejora su siguiente habilidad.\n"
+            f"Coste: **{COMBINE_COST}🪙** · Máximo **{COMBINE_MAX_TIERS}** mejoras por figura.\n"
+        ),
+        color=0x9b59b6
+    )
+
+    for k, cnt in list(eligible.items())[:10]:
+        fig      = FIGURES.get(k, {})
+        tier     = combine_upgrades.get(k, 0)
+        skills   = FIGURE_SKILLS.get(k, [])
+        # Para OG GAMER 64 solo contar habilidades de Fase 1
+        if k == "og_gamer64":
+            skills = [sk for sk in skills if sk.get("phase", 1) == 1]
+        next_skill = skills[tier]["name"] if tier < len(skills) else "—"
+        embed.add_field(
+            name=f"{fig.get('emoji','')} {fig.get('name', k)} ×{cnt}",
+            value=f"Mejora {tier+1}/3 → **{next_skill}** (+{SKILL_UPGRADE_BONUS} poder)\nNecesitas: 10 copias · Tienes: {cnt}",
+            inline=False
+        )
+
+    view = discord.ui.View(timeout=120)
+    uid  = interaction.user.id
+
+    for k in list(eligible.keys())[:5]:  # máx 5 botones
+        fig = FIGURES.get(k, {})
+
+        async def make_combine_cb(fig_key=k):
+            async def cb(inter: discord.Interaction):
+                if inter.user.id != uid:
+                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                db2   = load_db()
+                u2    = get_user(db2, inter.user.id)
+                if not u2:
+                    await inter.response.send_message("❌ Error de perfil.", ephemeral=True)
+                    return
+
+                # Re-verificar
+                cnt2  = sum(1 for f in u2.get("figures", []) if f.get("key") == fig_key)
+                cu2   = u2.setdefault("combine_upgrades", {})
+                tier2 = cu2.get(fig_key, 0)
+
+                if cnt2 < COMBINE_BATCH:
+                    await inter.response.send_message(f"❌ Ya no tienes suficientes copias ({cnt2}/10).", ephemeral=True)
+                    return
+                if tier2 >= COMBINE_MAX_TIERS:
+                    await inter.response.send_message("❌ Esta figura ya alcanzó el máximo de mejoras.", ephemeral=True)
+                    return
+                if u2.get("coins", 0) < COMBINE_COST:
+                    await inter.response.send_message(f"❌ No tienes suficiente oro. Necesitas {COMBINE_COST}🪙.", ephemeral=True)
+                    return
+
+                # Cobrar y eliminar 10 copias (excepto la primera del equipo)
+                u2["coins"] -= COMBINE_COST
+                team_indices = u2.get("team", [])
+                team_fig_keys = [u2["figures"][i]["key"] if i is not None and i < len(u2["figures"]) else None for i in team_indices]
+                removed = 0
+                new_figures = []
+                kept_one = False
+                for fd in u2["figures"]:
+                    if fd.get("key") == fig_key and removed < COMBINE_BATCH:
+                        if not kept_one:
+                            new_figures.append(fd)
+                            kept_one = True
+                        else:
+                            removed += 1
+                    else:
+                        new_figures.append(fd)
+                u2["figures"] = new_figures
+
+                # Reasignar índices del equipo (pueden haber cambiado)
+                new_team = []
+                for ti in team_indices:
+                    if ti is None:
+                        new_team.append(None)
+                    else:
+                        # Buscar el índice nuevo de esa clave
+                        key_at = None
+                        for ni, nf in enumerate(u2["figures"]):
+                            if nf.get("key") == (u2["figures"][ti]["key"] if ti < len(u2["figures"]) else None):
+                                key_at = ni
+                                break
+                        new_team.append(key_at)
+                u2["team"] = new_team
+
+                # Aplicar mejora
+                cu2[fig_key] = tier2 + 1
+                new_tier = tier2 + 1
+
+                # Guardar el bonus de la habilidad mejorada
+                skill_upgrades = u2.setdefault("skill_upgrades", {})
+                skill_upgrades.setdefault(fig_key, {})[tier2] = SKILL_UPGRADE_BONUS
+
+                save_db(db2)
+
+                fig2      = FIGURES.get(fig_key, {})
+                skills2   = FIGURE_SKILLS.get(fig_key, [])
+                if fig_key == "og_gamer64":
+                    skills2 = [sk for sk in skills2 if sk.get("phase", 1) == 1]
+                up_skill  = skills2[tier2]["name"] if tier2 < len(skills2) else "???"
+
+                ok_embed = discord.Embed(
+                    title=f"✅ ¡{fig2.get('emoji','')} {fig2.get('name', fig_key)} mejorada!",
+                    description=(
+                        f"10 copias fusionadas.\n"
+                        f"🔺 **{up_skill}** +{SKILL_UPGRADE_BONUS} de poder\n"
+                        f"Mejora **{new_tier}/{COMBINE_MAX_TIERS}** aplicada."
+                        + (f"\n⛔ Combinación bloqueada para esta figura." if new_tier >= COMBINE_MAX_TIERS else "")
+                    ),
+                    color=0x9b59b6
+                )
+                await inter.response.edit_message(embed=ok_embed, view=None)
+            return cb
+
+        btn = discord.ui.Button(
+            label=f"{fig.get('emoji','')} {fig.get('name', k)}",
+            style=discord.ButtonStyle.primary,
+            custom_id=f"combine_{k}"
+        )
+        btn.callback = await make_combine_cb()
+        view.add_item(btn)
+
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
+# ============================================================
+#  SISTEMA DE 6 TIENDAS CON RAREZA
+# ============================================================
+
+# Pool de figuras por rareza (excluye secretas y price=0)
+def _shop_pool(rarities: list[str]) -> list[str]:
+    return [k for k, v in FIGURES.items()
+            if v.get("rarity","").lower() in rarities
+            and v.get("price", 0) > 0
+            and k not in SECRET_FIGURES
+            and k != "roblox_boss"]
+
+SHOPS = {
+    "gamer": {
+        "name": "🎮 La Tienda Gamer",
+        "desc": "La tienda clásica. Figuras de todas las rarezas, buena variedad.",
+        "weights": {"común":35,"raro":40,"épico":20,"legendario":5,"mítico":0},
+        "slots": 5,
+    },
+    "bar": {
+        "name": "🍺 El Bar Random",
+        "desc": "Todo es un misterio. Cualquier figura puede aparecer aquí.",
+        "weights": {"común":30,"raro":35,"épico":25,"legendario":10,"mítico":0},
+        "slots": 5,
+        "refresh_on_visit": True,  # siempre figuras distintas
+    },
+    "mercado": {
+        "name": "🛒 Super Mercado",
+        "desc": "Precios accesibles, figuras básicas. Sin legendarios ni míticos.",
+        "weights": {"común":40,"raro":45,"épico":15,"legendario":0,"mítico":0},
+        "slots": 6,
+        "discount": 10,  # 10% de descuento
+    },
+    "toad": {
+        "name": "🍄 Tienda Toad",
+        "desc": "Stock exclusivo de figuras épicas y legendarias. ¡Raras de encontrar!",
+        "weights": {"común":0,"raro":15,"épico":55,"legendario":30,"mítico":0},
+        "slots": 4,
+    },
+    "tails": {
+        "name": "🔬 Laboratorio de Tails",
+        "desc": "Figuras técnicas y poco comunes. Sin comunes, mayor calidad.",
+        "weights": {"común":0,"raro":35,"épico":45,"legendario":20,"mítico":0},
+        "slots": 4,
+    },
+    "acertijo": {
+        "name": "❓ El Acertijo de las Compras",
+        "desc": "¡Cualquier cosa puede pasar! Posibilidad de figuras míticas y sobres misteriosos.",
+        "weights": {"común":20,"raro":35,"épico":30,"legendario":15,"mítico":0},
+        "has_packs": True,
+        "slots": 4,
+    },
+}
+
+# Probabilidad de mítico (separada porque es especial)
+SHOP_MYTHIC_CHANCE = {
+    "gamer": 0, "bar": 0, "mercado": 0, "toad": 0,
+    "tails": 0, "acertijo": 3,  # 3% de que aparezca una mítica en acertijo
+}
+
+MYSTERY_PACKS = {
+    "basic":   {"name": "📦 Sobre Básico",     "price": 300,  "desc": "1 figura común/raro"},
+    "premium": {"name": "📫 Sobre Premium",     "price": 800,  "desc": "1 figura raro/épico + 15% ingrediente"},
+    "legend":  {"name": "🌟 Sobre Legendario",  "price": 2000, "desc": "1 figura épico/legendario + 25% ingrediente + 10% receta"},
+    "mythic":  {"name": "💀 Sobre Mítico",      "price": 5000, "desc": "1 figura legendario/mítico + 50% ingrediente + 20% receta"},
+}
+
+def _pick_shop_figures(shop_id: str, count: int) -> list[str]:
+    """Elige `count` figuras para mostrar en una tienda según sus pesos de rareza."""
+    shop = SHOPS[shop_id]
+    w    = shop["weights"]
+    pool = []
+    mythic_chance = SHOP_MYTHIC_CHANCE.get(shop_id, 0)
+
+    # Construir pool ponderado
+    rarity_map = {
+        "común": ["común"], "raro": ["raro"],
+        "épico": ["épico", "epico"], "legendario": ["legendario", "Legendario"],
+        "mítico": ["mítico", "Mítico"],
+    }
+    for rarity, weight in w.items():
+        if weight > 0:
+            aliases = rarity_map.get(rarity, [rarity])
+            figs = [k for k, v in FIGURES.items()
+                    if v.get("rarity","").lower() in [a.lower() for a in aliases]
+                    and v.get("price", 0) > 0
+                    and k not in SECRET_FIGURES and k != "roblox_boss"]
+            pool.extend(figs * weight)
+
+    if not pool:
+        return []
+
+    chosen = []
+    seen   = set()
+    attempts = 0
+    while len(chosen) < count and attempts < 200:
+        attempts += 1
+        # Intentar mítico con su chance separada
+        if mythic_chance > 0 and random.randint(1, 100) <= mythic_chance:
+            mythic_pool = [k for k, v in FIGURES.items()
+                           if v.get("rarity","").lower() in ("mítico",)
+                           and k not in SECRET_FIGURES and v.get("price",0) > 0]
+            if mythic_pool:
+                pick = random.choice(mythic_pool)
+                if pick not in seen:
+                    chosen.append(pick)
+                    seen.add(pick)
+                continue
+        pick = random.choice(pool)
+        if pick not in seen:
+            chosen.append(pick)
+            seen.add(pick)
+    return chosen
+
+def _open_mystery_pack(pack_id: str, user_data: dict, db) -> dict:
+    """Abre un sobre misterioso y devuelve el resultado."""
+    rarity_pools = {
+        "basic":   ["común", "raro"],
+        "premium": ["raro", "épico", "epico"],
+        "legend":  ["épico", "epico", "legendario"],
+        "mythic":  ["legendario", "mítico"],
+    }
+    ing_chances  = {"basic": 0,  "premium": 15, "legend": 25, "mythic": 50}
+    rec_chances  = {"basic": 0,  "premium": 0,  "legend": 10, "mythic": 20}
+
+    pool = [k for k, v in FIGURES.items()
+            if v.get("rarity","").lower() in rarity_pools[pack_id]
+            and k not in SECRET_FIGURES and k != "roblox_boss" and v.get("price",0) > 0]
+    if not pool:
+        return {"fig": None, "ingredient": None, "recipe": None}
+
+    fig_key = random.choice(pool)
+    user_data.setdefault("figures", []).append({"key": fig_key, "level": 1, "xp": 0})
+
+    ingredient = None
+    if random.randint(1,100) <= ing_chances[pack_id]:
+        ingredient = give_battle_ingredient(user_data)
+
+    recipe = None
+    if random.randint(1,100) <= rec_chances[pack_id]:
+        all_recipes = list(range(len(RECIPES))) if 'RECIPES' in globals() else []
+        owned = user_data.get("recipe_sheets", [])
+        available_rec = [r for r in all_recipes if r not in owned]
+        if available_rec:
+            idx = random.choice(available_rec)
+            user_data.setdefault("recipe_sheets", []).append(idx)
+            recipe = RECIPES[idx]["name"] if idx < len(RECIPES) else None
+
+    return {"fig": fig_key, "ingredient": ingredient, "recipe": recipe}
+
+@bot.tree.command(name="tienda", description="Elige entre 6 tiendas y compra figuras")
+async def tienda(interaction: discord.Interaction):
+    db   = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    uid = interaction.user.id
+
+    # ── Menú de selección de tienda ──────────────────────────
+    embed = discord.Embed(
+        title="🏪 ¿Qué tienda quieres visitar?",
+        description="Cada tienda tiene su propio stock y probabilidades de rareza.",
+        color=0xf39c12
+    )
+    for sid, shop in SHOPS.items():
+        w   = shop["weights"]
+        active_rarezas = [f"{r} {p}%" for r, p in w.items() if p > 0]
+        mythic_c = SHOP_MYTHIC_CHANCE.get(sid, 0)
+        if mythic_c > 0:
+            active_rarezas.append(f"mítico {mythic_c}%")
+        embed.add_field(
+            name=shop["name"],
+            value=f"{shop['desc']}\n`{' · '.join(active_rarezas)}`",
+            inline=False
+        )
+
+    view = discord.ui.View(timeout=120)
+    for sid, shop in SHOPS.items():
+        btn = discord.ui.Button(label=shop["name"], style=discord.ButtonStyle.primary, custom_id=f"shop_{sid}")
+        async def make_shop_cb(shop_id=sid):
+            async def cb(inter: discord.Interaction):
+                if inter.user.id != uid:
+                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                await _show_shop(inter, shop_id, db, user, uid, edit=True)
+            return cb
+        btn.callback = await make_shop_cb()
+        view.add_item(btn)
+
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+async def _show_shop(interaction: discord.Interaction, shop_id: str, db, user, uid: int, edit=False):
+    shop     = SHOPS[shop_id]
+    discount = shop.get("discount", 0)
+    # Descuento del árbol de learn
+    learn_disc = get_learn_effect(user, "shop_discount_pct")
+    total_disc = discount + learn_disc
+
+    fig_keys = _pick_shop_figures(shop_id, shop["slots"])
+    figs     = [(k, FIGURES[k]) for k in fig_keys]
+
+    embed = discord.Embed(
+        title=shop["name"],
+        description=shop["desc"] + (f"\n💸 Descuento activo: **{total_disc}%**" if total_disc > 0 else ""),
+        color=0xf39c12
+    )
+    embed.add_field(name="💰 Tu oro", value=f"**{user.get('coins',0):,}🪙**", inline=True)
+
+    rarity_star = {"común":"⚪","raro":"🔵","épico":"🟣","legendario":"🌟","mítico":"🔱","Mítico":"🔱","Legendario":"🌟"}
+    for k, fig in figs:
+        base_price = fig.get("price", 0)
+        price = max(1, int(base_price * (1 - total_disc/100))) if total_disc > 0 else base_price
+        star  = rarity_star.get(fig.get("rarity",""), "⚪")
+        embed.add_field(
+            name=f"{fig['emoji']} {fig['name']} — {price:,}🪙 {star}",
+            value=(f"❤️ {fig['hp']} ⚔️ {fig['attack']} 🛡️ {fig['defense']} ⚡ {fig['speed']}\n"
+                   f"Rareza: **{fig['rarity'].upper()}**"),
+            inline=False
+        )
+
+    view = discord.ui.View(timeout=120)
+    # Botones de compra
+    for k, fig in figs:
+        base_price = fig.get("price", 0)
+        price = max(1, int(base_price * (1 - total_disc/100))) if total_disc > 0 else base_price
+        async def make_buy(fig_key=k, fig_price=price):
+            async def buy_cb(inter: discord.Interaction):
+                if inter.user.id != uid:
+                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                db2  = load_db()
+                u2   = get_user(db2, inter.user.id)
+                if u2.get("coins",0) < fig_price:
+                    await inter.response.send_message(f"❌ Necesitas **{fig_price:,}🪙** y tienes **{u2.get('coins',0):,}🪙**.", ephemeral=True)
+                    return
+                u2["coins"] -= fig_price
+                u2.setdefault("figures",[]).append({"key": fig_key, "level":1, "xp":0})
+                # Auto-equipar si hay hueco
+                team = u2.get("team",[None,None,None])
+                while len(team) < 3: team.append(None)
+                for i in range(3):
+                    if team[i] is None:
+                        team[i] = len(u2["figures"]) - 1
+                        break
+                u2["team"] = team
+                save_db(db2)
+                fig2 = FIGURES[fig_key]
+                ok   = discord.Embed(title=f"✅ ¡{fig2['name']} comprada!", color=0x2ecc71)
+                ok.add_field(name="💳 Saldo", value=f"**{u2['coins']:,}🪙**")
+                if fig2.get("image"): ok.set_thumbnail(url=fig2["image"])
+                await inter.response.send_message(embed=ok, ephemeral=True)
+            return buy_cb
+        btn = discord.ui.Button(label=f"Comprar {fig['name']}", style=discord.ButtonStyle.success, custom_id=f"buy_{k}")
+        btn.callback = await make_buy()
+        view.add_item(btn)
+
+    # Sobres del Acertijo
+    if shop.get("has_packs"):
+        for pack_id, pack in MYSTERY_PACKS.items():
+            async def make_pack_cb(pid=pack_id, pdata=pack):
+                async def pack_cb(inter: discord.Interaction):
+                    if inter.user.id != uid:
+                        await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                        return
+                    db2 = load_db()
+                    u2  = get_user(db2, inter.user.id)
+                    if u2.get("coins",0) < pdata["price"]:
+                        await inter.response.send_message(f"❌ Necesitas **{pdata['price']:,}🪙**.", ephemeral=True)
+                        return
+                    u2["coins"] -= pdata["price"]
+                    result = _open_mystery_pack(pid, u2, db2)
+                    save_db(db2)
+                    fig2 = FIGURES.get(result["fig"],{}) if result["fig"] else {}
+                    ok   = discord.Embed(
+                        title=f"📦 {pdata['name']} abierto!",
+                        description=f"🎭 Figura: **{fig2.get('name','?')}** {fig2.get('emoji','')}",
+                        color=0x9b59b6
+                    )
+                    if result["ingredient"]:
+                        ok.add_field(name="🧺 Ingrediente", value=str(result["ingredient"]), inline=True)
+                    if result["recipe"]:
+                        ok.add_field(name="📜 Receta", value=str(result["recipe"]), inline=True)
+                    ok.add_field(name="💳 Saldo", value=f"**{u2['coins']:,}🪙**", inline=True)
+                    await inter.response.send_message(embed=ok, ephemeral=True)
+                return pack_cb
+            pbtn = discord.ui.Button(
+                label=f"{pack['name']} ({pack['price']:,}🪙)",
+                style=discord.ButtonStyle.danger,
+                custom_id=f"pack_{pack_id}"
+            )
+            pbtn.callback = await make_pack_cb()
+            view.add_item(pbtn)
+
+    # Botón de volver
+    back_btn = discord.ui.Button(label="◀ Cambiar tienda", style=discord.ButtonStyle.secondary, custom_id="back_shop")
+    async def back_cb(inter: discord.Interaction):
+        if inter.user.id != uid:
+            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+            return
+        await tienda.callback(inter)
+    back_btn.callback = back_cb
+    view.add_item(back_btn)
+
+    if edit:
+        await interaction.response.edit_message(embed=embed, view=view)
+    else:
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
 # ============================================================
 #  /secret-store — Tienda secreta (no aparece en /ayuda)
 # ============================================================
