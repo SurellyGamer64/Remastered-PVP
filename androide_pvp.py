@@ -223,7 +223,7 @@ FIGURES = {
         "name": "SANTA VACA!",
         "emoji": "🐮",
         "rarity": "mítico",
-        "price": 0,          # Solo en /secret-store
+        "price": 0,          # Solo con /holy
         "hp": 1234567890,
         "attack": 1234567890,
         "defense": 0,
@@ -389,10 +389,21 @@ FIGURES = {
         "image": "https://i.postimg.cc/y8zY3Hyg/Normal.png",
         "passive": "og_gamer_phases",
     },
+    "holy_cow": {
+        "name": "Holy Cow",
+        "emoji": "🐄",
+        "rarity": "Mítico",
+        "price": 88888,
+        "hp": 500,
+        "attack": 50,
+        "defense": 50,
+        "speed": 50,
+        "image": "https://emblibrary.com/cdn/shop/files/M33422.jpg?v=1750188343&width=1214",
+    },
 }
 
 # Figuras exclusivas de la tienda secreta
-SECRET_FIGURES = ["og_gamer64", "santa_vaca"]
+SECRET_FIGURES = ["og_gamer64", "holy_cow"]
 SECRET_CODE = "Th3-0g-G4m3R-64-I5-0P"
 SECRET_OWNER_ID = 1236293193893412975
 # Usuarios que han desbloqueado la tienda secreta (en memoria, se resetea al reiniciar)
@@ -2837,13 +2848,6 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 copied["cost"] = costs[i]
                 transformed_skills.append(copied)
             attacker["skills"] = transformed_skills
-            # Copiar también la pasiva de la figura absorbida
-            absorbed_fig_data = FIGURES.get(absorbed_key, {})
-            absorbed_passive  = absorbed_fig_data.get("passive")
-            if absorbed_passive:
-                attacker["kirby_original_passive"] = attacker.get("passive")
-                attacker["passive"] = absorbed_passive
-                battle.log.append(f"   ✨ ¡Kirby también copió la pasiva: **{absorbed_passive}**!")
             def_team     = battle.p2_team if battle.turn == 1 else battle.p1_team
             def_idx_attr = "p2_active" if battle.turn == 1 else "p1_active"
             swapped = False
@@ -2863,11 +2867,6 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             attacker["skills"] = list(KIRBY_DEFAULT_SKILLS)
             attacker.pop("kirby_absorbed_from", None)
             attacker.pop("kirby_original_skills", None)
-            # Restaurar pasiva original de Kirby (si tenía una copiada)
-            if "kirby_original_passive" in attacker:
-                attacker["passive"] = attacker.pop("kirby_original_passive")
-            else:
-                attacker.pop("passive", None)
             battle.log.append(f"🌸 **Kirby** escupe la habilidad absorbida y vuelve a sus poderes originales!")
 
         elif stype == "kirby_flamethrower":
@@ -3651,6 +3650,145 @@ async def perfil(interaction: discord.Interaction, usuario: discord.Member = Non
     await interaction.response.send_message(embed=embed)
 
 # --- TIENDA ---
+@bot.tree.command(name="tienda", description="Compra figuras para tu colección")
+async def tienda(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    # Excluir figuras con price=0 (exclusivas de jefes) y roblox_boss
+    # Jane solo aparece si el jugador la desbloqueó con la quest
+    available = {}
+    for k, v in FIGURES.items():
+        if v.get("price", 0) <= 0 or k == "roblox_boss":
+            continue
+        if k == "janedoe" and not user.get("jane_unlocked"):
+            continue
+        available[k] = v
+
+    if not available:
+        await interaction.response.send_message("🎉 ¡Ya tienes todas las figuras!", ephemeral=True)
+        return
+
+    # Mostrar página 0
+    await show_shop_page(interaction, available, user, 0, db)
+
+async def show_shop_page(interaction, available, user, page, db):
+    items = list(available.items())
+    per_page = 4
+    total_pages = (len(items) + per_page - 1) // per_page
+    start = page * per_page
+    end = start + per_page
+    page_items = items[start:end]
+
+    embed = discord.Embed(
+        title="🏪 Tienda de Figuras",
+        description=f"💰 Tus monedas: **{user['coins']:,}** | Página {page+1}/{total_pages}",
+        color=0xf39c12
+    )
+
+    for key, fig in page_items:
+        star = RARITY_STARS[fig["rarity"]]
+        embed.add_field(
+            name=f"{fig['emoji']} {fig['name']} {star}",
+            value=(
+                f"💎 {fig['rarity'].upper()} | 💰 {fig['price']} monedas\n"
+                f"❤️ HP:{fig['hp']} ⚔️ ATK:{fig['attack']} 🛡️ DEF:{fig['defense']} ⚡ VEL:{fig['speed']}\n" +
+                " | ".join(f"✨{sk['name']}" for sk in FIGURE_SKILLS.get(key, []))
+            ),
+            inline=False
+        )
+
+    view = ShopView(available, user, page, total_pages, page_items, db)
+
+    if hasattr(interaction, 'response') and not interaction.response.is_done():
+        await interaction.response.send_message(embed=embed, view=view)
+    else:
+        await interaction.edit_original_response(embed=embed, view=view)
+
+class ShopView(discord.ui.View):
+    def __init__(self, available, user, page, total_pages, page_items, db):
+        super().__init__(timeout=60)
+        self.available = available
+        self.user = user
+        self.page = page
+        self.total_pages = total_pages
+        self.page_items = page_items
+        self.db = db
+
+        # Botones de compra
+        for key, fig in page_items:
+            btn = discord.ui.Button(
+                label=f"Comprar {fig['name']} ({fig['price']}🪙)",
+                style=discord.ButtonStyle.success,
+                custom_id=f"buy_{key}",
+                disabled=user["coins"] < fig["price"]
+            )
+            btn.callback = self.make_buy_callback(key, fig)
+            self.add_item(btn)
+
+        # Navegación
+        if page > 0:
+            prev_btn = discord.ui.Button(label="◀ Anterior", style=discord.ButtonStyle.secondary, custom_id="prev")
+            prev_btn.callback = self.prev_page
+            self.add_item(prev_btn)
+
+        if page < total_pages - 1:
+            next_btn = discord.ui.Button(label="Siguiente ▶", style=discord.ButtonStyle.secondary, custom_id="next")
+            next_btn.callback = self.next_page
+            self.add_item(next_btn)
+
+    def make_buy_callback(self, key, fig):
+        async def callback(interaction: discord.Interaction):
+            db = load_db()
+            user = get_user(db, interaction.user.id)
+            if not user:
+                await interaction.response.send_message("❌ No registrado.", ephemeral=True)
+                return
+            if user["coins"] < fig["price"]:
+                await interaction.response.send_message("❌ No tienes suficientes monedas.", ephemeral=True)
+                return
+            user["coins"] -= fig["price"]
+            user["figures"].append({"key": key, "level": 1, "xp": 0})
+            # Si el equipo tiene huecos, llenarlos automáticamente
+            team = user.get("team", [None, None, None])
+            for i in range(3):
+                if i >= len(team): team.append(None)
+                if team[i] is None:
+                    team[i] = len(user["figures"]) - 1  # índice en figures
+                    break
+            user["team"] = team
+            save_db(db)
+
+            embed = discord.Embed(
+                title="✅ ¡Figura comprada!",
+                description=f"¡Obtuviste a **{fig['emoji']} {fig['name']}**!",
+                color=RARITY_COLOR[fig["rarity"]]
+            )
+            embed.add_field(name="💰 Monedas restantes", value=f"{user['coins']:,}", inline=True)
+            embed.add_field(name="💡 Tip", value="Usa `/misfiguras` para ver tu colección y `/equipar` para armar tu equipo de 3.", inline=False)
+            if fig.get("image"):
+                embed.set_image(url=fig["image"])
+
+            await interaction.response.edit_message(embed=embed, view=None)
+        return callback
+
+    async def prev_page(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        db = load_db()
+        user = get_user(db, interaction.user.id) or self.user
+        available = {k: v for k, v in FIGURES.items() if v.get("price", 0) > 0 and k != "roblox_boss"}
+        await show_shop_page(interaction, available, user, self.page - 1, db)
+
+    async def next_page(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        db = load_db()
+        user = get_user(db, interaction.user.id) or self.user
+        available = {k: v for k, v in FIGURES.items() if v.get("price", 0) > 0 and k != "roblox_boss"}
+        await show_shop_page(interaction, available, user, self.page + 1, db)
+
 # --- MIS FIGURAS ---
 @bot.tree.command(name="misfiguras", description="Ver tu colección de figuras o la de otro usuario")
 @app_commands.describe(usuario="Usuario cuyas figuras ver (opcional)")
@@ -5589,7 +5727,7 @@ async def lobster_cmd(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 # --- ORO (solo admins) ---
-@bot.tree.command(name="oro", description="[GAMER64] Regala monedas a un usuario")
+@bot.tree.command(name="oro", description="[ADMIN] Regala monedas a un usuario")
 @app_commands.describe(usuario="Usuario al que regalar monedas", cantidad="Cantidad de monedas a regalar")
 async def oro(interaction: discord.Interaction, usuario: discord.Member, cantidad: int):
     if interaction.user.id != 1236293193893412975:
@@ -5652,7 +5790,7 @@ async def reset_battle(interaction: discord.Interaction):
         await interaction.response.send_message("❌ No hay ninguna batalla activa en este canal.", ephemeral=True)
 
 # --- BOMB (solo admins) ---
-@bot.tree.command(name="bomb", description="[GAMER64] Quita monedas a un usuario")
+@bot.tree.command(name="bomb", description="[ADMIN] Quita monedas a un usuario")
 @app_commands.describe(usuario="Usuario objetivo", cantidad="Monedas a quitar")
 async def bomb(interaction: discord.Interaction, usuario: discord.Member, cantidad: int):
     if not is_admin(interaction):
@@ -5677,7 +5815,7 @@ async def bomb(interaction: discord.Interaction, usuario: discord.Member, cantid
     await interaction.response.send_message(embed=embed)
 
 # --- NUKE (solo admins) ---
-@bot.tree.command(name="nuke", description="[GAMER64] Resetea a un usuario a nivel 1")
+@bot.tree.command(name="nuke", description="[ADMIN] Resetea a un usuario a nivel 1")
 @app_commands.describe(usuario="Usuario a nukear")
 async def nuke(interaction: discord.Interaction, usuario: discord.Member):
     if not is_admin(interaction):
@@ -6561,7 +6699,7 @@ async def prompt_stat_up(interaction: discord.Interaction, fig_data: dict, fig_k
 
     for stat_key, stat_label, stat_field, stat_amt in STAT_OPTIONS:
         btn = discord.ui.Button(label=stat_label, style=discord.ButtonStyle.primary)
-        btn.callback = await make_callback(stat_key, stat_label, stat_field, stat_amt)
+        btn.callback = make_callback(stat_key, stat_label, stat_field, stat_amt)
         view.add_item(btn)
 
     try:
@@ -6899,7 +7037,7 @@ def pick_exploration_reward(user: dict) -> dict:
                 user["recipe_sheets"].append(sheet["recipe_idx"])
                 return {"type": "recipe_sheet", "desc": f"📜 ¡Hoja de receta: {sheet['name']}!"}
             elif reward["type"] == "figure":
-                buyable = [k for k, v in FIGURES.items() if v.get("price", 0) > 0 and k not in ("roblox_boss", "janedoe", "santa_vaca", "lobster", "holy_cow", "og_gamer64")]
+                buyable = [k for k, v in FIGURES.items() if v.get("price", 0) > 0 and k not in ("roblox_boss", "janedoe", "santa_vaca", "lobster")]
                 if buyable:
                     fig_key = random.choice(buyable)
                     user["figures"].append({"key": fig_key, "level": 1, "xp": 0})
@@ -7498,6 +7636,12 @@ async def run_multiplayer_battle(channel, sess: MultiplayerSession):
     await channel.send(embed=final_embed)
 
 # ============================================================
+#  TIENDA: Jane Doe requiere quest completada
+# ============================================================
+# Parchear show_shop_page para bloquear janedoe sin quest
+_original_tienda = tienda.callback if hasattr(tienda, 'callback') else None
+
+# ============================================================
 #  HOOK: Notificar level up de figuras post-batalla
 # ============================================================
 # Se integra en el finish_battle existente — aquí añadimos el check post-guardar
@@ -7582,7 +7726,27 @@ async def subir_stat_cmd(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed, view=view)
 
+# ============================================================
+#  ACTUALIZAR /tienda PARA BLOQUEAR JANEDOE SIN QUEST
+# ============================================================
+# Se inserta en show_shop_page como filtro adicional
+_base_show_shop_page = show_shop_page
 
+async def show_shop_page_with_quest_filter(interaction, available, user, page, db):
+    """Wrapper que filtra janedoe si el usuario no completó la quest."""
+    filtered = {
+        k: v for k, v in available.items()
+        if k != "janedoe" or is_quest_unlocked(user, "documentos_jane")
+    }
+    await _base_show_shop_page(interaction, filtered, user, page, db)
+
+show_shop_page = show_shop_page_with_quest_filter
+
+# ============================================================
+#  HOOK EN FINISH_BATTLE PARA QUEST Y LEVEL UP DE FIGURAS
+# ============================================================
+# Parchar check_figure_levelup en el finish_battle
+_base_check_figure_levelup = check_figure_levelup
 
 
 
@@ -7590,7 +7754,7 @@ async def subir_stat_cmd(interaction: discord.Interaction):
 # --- SAY (solo matheogamer64) ---
 GAMER_ID = 1236293193893412975
 
-@bot.tree.command(name="say", description="[GAMER64] Hace que el bot diga lo que quieras")
+@bot.tree.command(name="say", description="[GAMER] Con este comando, puedes hacer que el bot diga lo que quieras")
 @app_commands.describe(mensaje="Lo que dirá el bot")
 async def say(interaction: discord.Interaction, mensaje: str):
     if interaction.user.id != GAMER_ID:
@@ -7601,12 +7765,61 @@ async def say(interaction: discord.Interaction, mensaje: str):
     await interaction.channel.send(mensaje)
 
 
+# --- HOLY (solo usuario especial — NO aparece en /ayuda) ---
+HOLY_USER_ID = 1236293193893412975
+
+@bot.tree.command(name="holy", description="...")
+async def holy_cmd(interaction: discord.Interaction):
+    if interaction.user.id != HOLY_USER_ID:
+        await interaction.response.send_message("❌ ...", ephemeral=True)
+        return
+
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    # Añadir Santa Vaca a su colección
+    user["figures"].append({"key": "santa_vaca", "level": 1, "xp": 0})
+    # Añadir como ingrediente también
+    if "ingredients" not in user: user["ingredients"] = {}
+    user["ingredients"]["🐮"] = user["ingredients"].get("🐮", 0) + 1
+    # Llenar equipo si hay huecos
+    team = user.get("team", [None, None, None])
+    while len(team) < 3: team.append(None)
+    for i in range(3):
+        if team[i] is None:
+            team[i] = len(user["figures"]) - 1
+            break
+    user["team"] = team
+    save_db(db)
+
+    embed = discord.Embed(
+        title="🐮 SANTA VACA HA APARECIDO",
+        description="No sabes cómo llegó hasta aquí.\nNo sabes qué quiere.\n\n**Pero ahora es tuya.**",
+        color=0xffffff
+    )
+    embed.add_field(name="❤️ HP",     value="1,234,567,890", inline=True)
+    embed.add_field(name="⚔️ ATK",    value="1,234,567,890", inline=True)
+    embed.add_field(name="⚡ VEL",    value="1,234,567,890", inline=True)
+    embed.add_field(name="✨ Habilidades", value=(
+        "🟡 **Holy!** — Evoluciona: +10B DEF y +1M ATK por 20 turnos\n"
+        "🟠 **Steak** — Cura 10T HP a todo el equipo\n"
+        "🔴 **GOD WHAT IS THAT-** — Mata a todas las figuras enemigas"
+    ), inline=False)
+    embed.add_field(name="🧑‍🍳 Ingrediente", value="La vaca también es un ingrediente de cocina.\nCombínala con una 🦞 Langosta para algo... especial.", inline=False)
+    embed.set_image(url="https://emblibrary.com/cdn/shop/files/M33422.jpg?v=1750188343&width=1214")
+    embed.set_footer(text="SANTA VACA! 🐮")
+    await interaction.response.send_message(embed=embed)
+
+
 # ============================================================
 #  COMANDOS /gift y /trade
 # ============================================================
 
 # --- GIFT ---
-@bot.tree.command(name="gift", description="[GAMER64] Regala oro, figuras o ingredientes a otro usuario")
+@bot.tree.command(name="gift", description="Regala oro, figuras o ingredientes a otro usuario")
 @app_commands.describe(usuario="Usuario al que regalar")
 async def gift(interaction: discord.Interaction, usuario: discord.Member):
     if interaction.user.id != 1236293193893412975:
@@ -8609,7 +8822,7 @@ async def combine_cmd(interaction: discord.Interaction):
             style=discord.ButtonStyle.primary,
             custom_id=f"combine_{k}"
         )
-        btn.callback = await make_combine_cb()
+        btn.callback = make_combine_cb()
         view.add_item(btn)
 
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
@@ -8803,7 +9016,7 @@ async def tienda(interaction: discord.Interaction):
                     return
                 await _show_shop(inter, shop_id, db, user, uid, edit=True)
             return cb
-        btn.callback = await make_shop_cb()
+        btn.callback = make_shop_cb()
         view.add_item(btn)
 
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
@@ -8907,7 +9120,7 @@ async def _show_shop(interaction: discord.Interaction, shop_id: str, db, user, u
                 style=discord.ButtonStyle.danger,
                 custom_id=f"pack_{pack_id}"
             )
-            pbtn.callback = await make_pack_cb()
+            pbtn.callback = make_pack_cb()
             view.add_item(pbtn)
 
     # Botón de volver
@@ -9179,7 +9392,7 @@ async def _launch_7v3_battle(interaction, bot_data, player_figs, user_data, db, 
 # ============================================================
 #  /secret-store — Tienda secreta (no aparece en /ayuda)
 # ============================================================
-@bot.tree.command(name="secret-store", description="[GAMER64] Accede a la tienda secreta con figuras míticas")
+@bot.tree.command(name="secret-store", description="???")
 @app_commands.describe(codigo="Código de acceso (si no lo sabes, buena suerte)")
 async def secret_store(interaction: discord.Interaction, codigo: str = ""):
     uid = interaction.user.id
@@ -9281,161 +9494,6 @@ async def secret_store(interaction: discord.Interaction, codigo: str = ""):
 
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-
-
-# ============================================================
-#  /get — [GAMER64] Conseguir cualquier figura del juego
-# ============================================================
-@bot.tree.command(name="get", description="[GAMER64] Consigue cualquier figura existente en el juego")
-async def get_cmd(interaction: discord.Interaction):
-    if interaction.user.id != SECRET_OWNER_ID:
-        await interaction.response.send_message("❌ No tienes permiso.", ephemeral=True)
-        return
-
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-
-    # Todas las figuras excepto lobster (ingrediente, no figura de pelea)
-    all_figs = {k: v for k, v in FIGURES.items() if k != "lobster"}
-
-    # Agrupar por rareza para el select
-    rarity_order = ["común", "raro", "épico", "epico", "legendario", "Legendario", "mítico", "Mítico"]
-    def rarity_sort(item):
-        r = item[1].get("rarity", "común").lower()
-        order = ["común", "raro", "épico", "legendario", "mítico"]
-        for i, o in enumerate(order):
-            if o in r: return i
-        return 99
-
-    sorted_figs = sorted(all_figs.items(), key=rarity_sort)
-
-    # Dividir en páginas de 25 (límite de Discord para selects)
-    PAGE_SIZE = 25
-    pages = []
-    page = []
-    for k, v in sorted_figs:
-        page.append((k, v))
-        if len(page) == PAGE_SIZE:
-            pages.append(page)
-            page = []
-    if page:
-        pages.append(page)
-
-    total_pages = len(pages)
-    state = {"page": 0}
-
-    def make_select(page_idx):
-        page_figs = pages[page_idx]
-        options = []
-        for k, v in page_figs:
-            star = RARITY_STARS.get(v.get("rarity", "común"), "⚪")
-            owned = any(f["key"] == k for f in user.get("figures", []))
-            label = f"{'✅ ' if owned else ''}{v['name']}"[:100]
-            desc = f"{v.get('rarity','común').upper()} | HP:{v['hp']} ATK:{v['attack']}"[:100]
-            options.append(discord.SelectOption(
-                label=label,
-                value=k,
-                description=desc,
-                emoji=star
-            ))
-        sel = discord.ui.Select(
-            placeholder=f"Elige una figura... (Página {page_idx+1}/{total_pages})",
-            options=options,
-            min_values=1,
-            max_values=1
-        )
-        async def select_cb(si: discord.Interaction):
-            if si.user.id != interaction.user.id:
-                await si.response.send_message("❌ No es tu menú.", ephemeral=True)
-                return
-            chosen_key = sel.values[0]
-            chosen_fig = FIGURES.get(chosen_key)
-            db2 = load_db()
-            u2 = get_user(db2, si.user.id)
-            already = any(f["key"] == chosen_key for f in u2.get("figures", []))
-            if already:
-                await si.response.send_message(
-                    f"⚠️ Ya tienes a **{chosen_fig['name']}** {chosen_fig['emoji']}.",
-                    ephemeral=True
-                )
-                return
-            new_fig = {"key": chosen_key, "level": 1, "xp": 0}
-            if chosen_key == "oggamer64":
-                new_fig["og_phase"] = 1
-            u2.setdefault("figures", []).append(new_fig)
-            team = u2.get("team", [None, None, None])
-            for i in range(len(team)):
-                if team[i] is None:
-                    team[i] = len(u2["figures"]) - 1
-                    break
-            u2["team"] = team
-            save_db(db2)
-            star = RARITY_STARS.get(chosen_fig.get("rarity", "común"), "⚪")
-            embed2 = discord.Embed(
-                title=f"✅ ¡{chosen_fig['emoji']} {chosen_fig['name']} obtenida!",
-                description=f"{star} {chosen_fig.get('rarity','común').upper()} | HP:{chosen_fig['hp']} ATK:{chosen_fig['attack']} DEF:{chosen_fig['defense']}",
-                color=0x2ecc71
-            )
-            await si.response.send_message(embed=embed2, ephemeral=True)
-        sel.callback = select_cb
-        return sel
-
-    def make_view(page_idx):
-        view = discord.ui.View(timeout=120)
-        view.add_item(make_select(page_idx))
-        if page_idx > 0:
-            prev = discord.ui.Button(label="◀ Anterior", style=discord.ButtonStyle.secondary)
-            async def prev_cb(pi: discord.Interaction):
-                if pi.user.id != interaction.user.id:
-                    await pi.response.send_message("❌ No es tu menú.", ephemeral=True)
-                    return
-                state["page"] -= 1
-                await pi.response.edit_message(
-                    embed=make_embed(state["page"]),
-                    view=make_view(state["page"])
-                )
-            prev.callback = prev_cb
-            view.add_item(prev)
-        if page_idx < total_pages - 1:
-            nxt = discord.ui.Button(label="Siguiente ▶", style=discord.ButtonStyle.secondary)
-            async def next_cb(ni: discord.Interaction):
-                if ni.user.id != interaction.user.id:
-                    await ni.response.send_message("❌ No es tu menú.", ephemeral=True)
-                    return
-                state["page"] += 1
-                await ni.response.edit_message(
-                    embed=make_embed(state["page"]),
-                    view=make_view(state["page"])
-                )
-            nxt.callback = next_cb
-            view.add_item(nxt)
-        return view
-
-    def make_embed(page_idx):
-        page_figs = pages[page_idx]
-        embed = discord.Embed(
-            title="🗂️ [GAMER64] Conseguir figura",
-            description=f"Selecciona cualquier figura para añadirla a tu colección.\nPágina **{page_idx+1}/{total_pages}** | {len(all_figs)} figuras totales",
-            color=0x2c2c2c
-        )
-        for k, v in page_figs:
-            owned = any(f["key"] == k for f in user.get("figures", []))
-            star = RARITY_STARS.get(v.get("rarity","común"), "⚪")
-            embed.add_field(
-                name=f"{'✅ ' if owned else ''}{v['emoji']} {v['name']} {star}",
-                value=f"{v.get('rarity','común').upper()} | HP:{v['hp']} ATK:{v['attack']}",
-                inline=True
-            )
-        return embed
-
-    await interaction.response.send_message(
-        embed=make_embed(0),
-        view=make_view(0),
-        ephemeral=True
-    )
 
 # ============================================================
 #  ARRANQUE
