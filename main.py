@@ -6528,7 +6528,7 @@ async def prompt_stat_up(interaction: discord.Interaction, fig_data: dict, fig_k
     view = discord.ui.View(timeout=60)
     user_id = interaction.user.id
 
-    async def make_callback(stat_key, stat_label, stat_field, stat_amt):
+    def make_callback(stat_key, stat_label, stat_field, stat_amt):
         async def callback(inter: discord.Interaction):
             if inter.user.id != user_id:
                 await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
@@ -6578,7 +6578,7 @@ async def prompt_stat_up(interaction: discord.Interaction, fig_data: dict, fig_k
 async def leaderboard_cmd(interaction: discord.Interaction):
     view = discord.ui.View(timeout=60)
 
-    async def make_lb_callback(lb_type):
+    def make_lb_callback(lb_type):
         async def callback(inter: discord.Interaction):
             db = load_db()
             users = list(db.get("users", {}).items())
@@ -7551,7 +7551,7 @@ async def subir_stat_cmd(interaction: discord.Interaction):
 
     for stat_key, label in stats:
         btn = discord.ui.Button(label=label, style=discord.ButtonStyle.primary)
-        async def make_cb(sk, sl, fig_idx):
+        def make_cb(sk, sl, fig_idx):
             async def cb(inter: discord.Interaction):
                 if inter.user.id != interaction.user.id:
                     await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
@@ -8348,7 +8348,7 @@ async def learn_cmd(interaction: discord.Interaction):
                 custom_id=f"learn_{nid}",
                 row=list(LEARN_TREE.keys()).index(nid) // 5
             )
-            async def make_cb(node_id=nid, node_data=node):
+            def make_cb(node_id=nid, node_data=node):
                 async def cb(inter: discord.Interaction):
                     if inter.user.id != uid:
                         await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
@@ -8558,7 +8558,7 @@ async def combine_cmd(interaction: discord.Interaction):
     for k in list(eligible.keys())[:5]:  # máx 5 botones
         fig = FIGURES.get(k, {})
 
-        async def make_combine_cb(fig_key=k):
+        def make_combine_cb(fig_key=k):
             async def cb(inter: discord.Interaction):
                 if inter.user.id != uid:
                     await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
@@ -8838,7 +8838,7 @@ async def tienda(interaction: discord.Interaction):
     view = discord.ui.View(timeout=120)
     for sid, shop in SHOPS.items():
         btn = discord.ui.Button(label=shop["name"], style=discord.ButtonStyle.primary, custom_id=f"shop_{sid}")
-        async def make_shop_cb(shop_id=sid):
+        def make_shop_cb(shop_id=sid):
             async def cb(inter: discord.Interaction):
                 if inter.user.id != uid:
                     await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
@@ -8884,7 +8884,7 @@ async def _show_shop(interaction: discord.Interaction, shop_id: str, db, user, u
     for k, fig in figs:
         base_price = fig.get("price", 0)
         price = max(1, int(base_price * (1 - total_disc/100))) if total_disc > 0 else base_price
-        async def make_buy(fig_key=k, fig_price=price):
+        def make_buy(fig_key=k, fig_price=price):
             async def buy_cb(inter: discord.Interaction):
                 if inter.user.id != uid:
                     await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
@@ -8918,7 +8918,7 @@ async def _show_shop(interaction: discord.Interaction, shop_id: str, db, user, u
     # Sobres del Acertijo
     if shop.get("has_packs"):
         for pack_id, pack in MYSTERY_PACKS.items():
-            async def make_pack_cb(pid=pack_id, pdata=pack):
+            def make_pack_cb(pid=pack_id, pdata=pack):
                 async def pack_cb(inter: discord.Interaction):
                     if inter.user.id != uid:
                         await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
@@ -9148,7 +9148,7 @@ async def _start_impostor_7v3(interaction: discord.Interaction, bot_data: dict, 
             style=discord.ButtonStyle.danger if count <= 3 else (discord.ButtonStyle.primary if count <= 5 else discord.ButtonStyle.secondary),
             custom_id=f"impostor_team_{count}"
         )
-        async def make_cb(team_size=count):
+        def make_cb(team_size=count):
             async def cb(inter: discord.Interaction):
                 if inter.user.id != uid:
                     await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
@@ -9275,7 +9275,7 @@ async def secret_store(interaction: discord.Interaction, codigo: str = ""):
         if not fig:
             continue
 
-        async def make_buy_cb(fig_key=key):
+        def make_buy_cb(fig_key=key):
             async def buy_cb(inter: discord.Interaction):
                 if inter.user.id != uid:
                     await inter.response.send_message("❌ Esta tienda es tuya, no de otros.", ephemeral=True)
