@@ -8963,7 +8963,10 @@ async def _show_shop(interaction: discord.Interaction, shop_id: str, db, user, u
     view.add_item(back_btn)
 
     if edit:
-        await interaction.response.edit_message(embed=embed, view=view)
+        try:
+            await interaction.response.edit_message(embed=embed, view=view)
+        except discord.errors.InteractionResponded:
+            await interaction.edit_original_response(embed=embed, view=view)
     else:
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
