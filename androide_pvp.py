@@ -7498,12 +7498,6 @@ async def run_multiplayer_battle(channel, sess: MultiplayerSession):
     await channel.send(embed=final_embed)
 
 # ============================================================
-#  TIENDA: Jane Doe requiere quest completada
-# ============================================================
-# Parchear show_shop_page para bloquear janedoe sin quest
-_original_tienda = tienda.callback if hasattr(tienda, 'callback') else None
-
-# ============================================================
 #  HOOK: Notificar level up de figuras post-batalla
 # ============================================================
 # Se integra en el finish_battle existente — aquí añadimos el check post-guardar
