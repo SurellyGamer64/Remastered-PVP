@@ -7582,27 +7582,7 @@ async def subir_stat_cmd(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed, view=view)
 
-# ============================================================
-#  ACTUALIZAR /tienda PARA BLOQUEAR JANEDOE SIN QUEST
-# ============================================================
-# Se inserta en show_shop_page como filtro adicional
-_base_show_shop_page = show_shop_page
 
-async def show_shop_page_with_quest_filter(interaction, available, user, page, db):
-    """Wrapper que filtra janedoe si el usuario no completó la quest."""
-    filtered = {
-        k: v for k, v in available.items()
-        if k != "janedoe" or is_quest_unlocked(user, "documentos_jane")
-    }
-    await _base_show_shop_page(interaction, filtered, user, page, db)
-
-show_shop_page = show_shop_page_with_quest_filter
-
-# ============================================================
-#  HOOK EN FINISH_BATTLE PARA QUEST Y LEVEL UP DE FIGURAS
-# ============================================================
-# Parchar check_figure_levelup en el finish_battle
-_base_check_figure_levelup = check_figure_levelup
 
 
 
