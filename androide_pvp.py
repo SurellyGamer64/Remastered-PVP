@@ -223,7 +223,7 @@ FIGURES = {
         "name": "SANTA VACA!",
         "emoji": "🐮",
         "rarity": "mítico",
-        "price": 0,          # Solo con /holy
+        "price": 0,          # Solo en /secret-store
         "hp": 1234567890,
         "attack": 1234567890,
         "defense": 0,
@@ -389,21 +389,10 @@ FIGURES = {
         "image": "https://i.postimg.cc/y8zY3Hyg/Normal.png",
         "passive": "og_gamer_phases",
     },
-    "holy_cow": {
-        "name": "Holy Cow",
-        "emoji": "🐄",
-        "rarity": "Mítico",
-        "price": 88888,
-        "hp": 500,
-        "attack": 50,
-        "defense": 50,
-        "speed": 50,
-        "image": "https://emblibrary.com/cdn/shop/files/M33422.jpg?v=1750188343&width=1214",
-    },
 }
 
 # Figuras exclusivas de la tienda secreta
-SECRET_FIGURES = ["og_gamer64", "holy_cow"]
+SECRET_FIGURES = ["og_gamer64", "santa_vaca"]
 SECRET_CODE = "Th3-0g-G4m3R-64-I5-0P"
 SECRET_OWNER_ID = 1236293193893412975
 # Usuarios que han desbloqueado la tienda secreta (en memoria, se resetea al reiniciar)
@@ -1484,7 +1473,91 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
     # Reducir contadores de bloqueo
     battle.tick_locks()
 
-    # Pasiva de Caine: WHY DO YOU PEOPLE TORMENT ME
+    # ── TICK: Efectos especiales de los Impostores FNF ────────────────────────
+
+    # Ejected queue — cuenta atrás para el retorno de Green/Maroon
+    if hasattr(battle, "ejected_queue") and battle.ejected_queue:
+        still_pending = []
+        for eq in battle.ejected_queue:
+            eq["turns_left"] -= 1
+            if eq["turns_left"] <= 0:
+                # Comprobar si quedan figuras vivas en el bando enemigo del eyectado
+                team     = battle.p1_team if eq["attacker_team"] == "p1" else battle.p2_team
+                opp_team = battle.p2_team if eq["attacker_team"] == "p1" else battle.p1_team
+                still_alive = any(f["hp"] > 0 for f in opp_team)
+                if still_alive:
+                    # VUELVE en segunda forma
+                    idx  = eq["attacker_idx"]
+                    sf   = eq["second_form"]
+                    if sf in FIGURES and idx < len(team):
+                        orig_fig  = FIGURES[sf]
+                        new_entry = make_fighter(sf, {"level":1,"xp":0,"stat_ups":{}})
+                        team[idx] = new_entry
+                        # Reactivar esa figura si el equipo no tiene activo
+                        idx_attr = "p1_active" if eq["attacker_team"] == "p1" else "p2_active"
+                        if team[getattr(battle, idx_attr)]["hp"] <= 0:
+                            setattr(battle, idx_attr, idx)
+                        battle.log.append(f"🚀 **{orig_fig['name']}** VUELVE... ¡y está TRANSFORMADO!")
+                # Si no quedan vivos, no vuelve (ya ganaste)
+            else:
+                still_pending.append(eq)
+                if eq["turns_left"] <= 5:
+                    battle.log.append(f"⏳ Los expulsados regresan en **{eq['turns_left']} turnos**...")
+        battle.ejected_queue = still_pending
+
+    # cant_attack_turns — Green no puede atacar
+    for fig in battle.p1_team + battle.p2_team:
+        if fig.get("cant_attack_turns", 0) > 0:
+            fig["cant_attack_turns"] -= 1
+
+    # hiding_turns — White Impostor emboscada
+    for fig in battle.p1_team + battle.p2_team:
+        if fig.get("hiding_turns", 0) > 0:
+            fig["hiding_turns"] -= 1
+            if fig["hiding_turns"] == 0:
+                # Golpe sorpresa
+                def_team = battle.p2_team if fig in battle.p1_team else battle.p1_team
+                def_idx_attr = "p2_active" if fig in battle.p1_team else "p1_active"
+                target = def_team[getattr(battle, def_idx_attr)]
+                dmg = max(1, fig.get("hiding_strike_dmg", 30))
+                target["hp"] = max(0, target["hp"] - dmg)
+                # Volver a poner a White activo
+                atk_team = battle.p1_team if fig in battle.p1_team else battle.p2_team
+                atk_attr = "p1_active" if fig in battle.p1_team else "p2_active"
+                for i, f in enumerate(atk_team):
+                    if f is fig:
+                        setattr(battle, atk_attr, i)
+                        break
+                fig.pop("hiding", None)
+                battle.log.append(f"⚪ **{fig['name']}** sale de las sombras y ataca a {target['emoji']} {target['name']} por **{dmg}** de daño!")
+
+    # flying_monstrosity — resolución al acabarse los turnos
+    for fig in battle.p1_team + battle.p2_team:
+        if fig.get("flying_hold_turns", 0) > 0:
+            fig["flying_hold_turns"] -= 1
+            if fig["flying_hold_turns"] == 0:
+                # Si Green sobrevivió, la figura agarrada muere
+                if fig["hp"] > 0:
+                    # Encontrar la figura agarrada (la que tenía flying_held_turns)
+                    def_team = battle.p2_team if fig in battle.p1_team else battle.p1_team
+                    for held in def_team:
+                        if held.get("flying_held_turns", 0) > 0:
+                            held["flying_held_turns"] = 0
+                            held["hp"] = 0
+                            battle.log.append(f"🟢 **{fig['name']}** soltó a **{held['name']}**... demasiado tarde. ☠️")
+                            break
+
+    # rage_bait_debuff_turns
+    for fig in battle.p1_team + battle.p2_team:
+        if fig.get("rage_bait_debuff_turns", 0) > 0:
+            fig["rage_bait_debuff_turns"] -= 1
+            if fig["rage_bait_debuff_turns"] == 0:
+                fig["atk"] = min(fig["atk"] + 10, fig.get("base_atk", fig["atk"] + 10))
+
+    # friendship_shield — absorbe un ataque si tiene hits
+    # (se procesa en el bloque de daño abajo)
+
+
     if attacker.get("passive_torment_active"):
         attacker["passive_torment_turns"] -= 1
         if attacker["passive_torment_turns"] <= 0:
@@ -1528,6 +1601,16 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
     if attacker.get("stun_turns", 0) > 0:
         attacker["stun_turns"] -= 1
         battle.log.append(f"😵 **{attacker['name']}** está aturdido y pierde su turno! ({attacker['stun_turns']} turnos restantes)")
+        battle.turn = 2 if battle.turn == 1 else 1
+        await finish_turn(interaction, battle, channel_id)
+        return
+
+    # Can't attack (Keep the Act de Green)
+    if attacker.get("cant_attack_turns", 0) > 0:
+        battle.log.append(f"🟢 **{attacker['name']}** está fingiendo ser tripulante... no puede atacar aún.")
+        battle.turn = 2 if battle.turn == 1 else 1
+        await finish_turn(interaction, battle, channel_id)
+        return
         # El turno VUELVE al rival (quien aturdo), no avanza
         battle.turn = 2 if battle.turn == 1 else 1
         await finish_turn(interaction, battle, channel_id)
@@ -1562,9 +1645,12 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             dmg = max(1, int(dmg * reduction))
             defender["apple_armor_turns"] -= 1
             battle.log.append(f"   🍎🛡️ **Apple Armor** absorbe el golpe! (daño reducido al {int(reduction*100)}%, quedan {defender['apple_armor_turns']} turnos)")
+        # Friendship Shield — absorbe el golpe completamente
+        if defender.get("shield_hits", 0) > 0 and defender.get("shield_turns", 0) > 0:
+            defender["shield_hits"] -= 1
+            battle.log.append(f"   🩷 ¡El **Escudo de Amistad** absorbe el golpe! ({defender['shield_hits']} hits restantes)")
+            dmg = 0
         defender["hp"] = max(0, defender["hp"] - dmg)
-        buff_txt = f" (⭐+{bonus_atk} ATK)" if bonus_atk else ""
-        battle.log.append(f"⚔️ **{attacker['emoji']} {attacker['name']}** ataca{buff_txt} → **{dmg}** daño! (+20⚡)")
         # Parry check
         if defender.get("parrying"):
             defender["parrying"] = False
@@ -2619,7 +2705,124 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 battle.log.append(f"   💥 Daño de explosión a aliados: {', '.join(splashed)}")
             battle.log.append(f"   💀 **{attacker['name']}** también cae en la explosión...")
 
-        elif stype == "kirby_absorb":
+        elif stype == "keep_the_act":
+            bar_bonus = skill.get("bar_bonus", 50)
+            attacker["energy"] = min(attacker.get("energy_cap", ENERGY_MAX), attacker.get("energy", 0) + bar_bonus)
+            attacker["cant_attack_turns"] = skill.get("cant_attack_turns", 2)
+            battle.log.append(f"🟢 **{attacker['name']}** finge ser tripulante... +{bar_bonus}⚡ barra.")
+            battle.log.append(f"   ⚠️ No puede atacar por {skill.get('cant_attack_turns',2)} turnos.")
+
+        elif stype == "lights_out":
+            stun_t = skill.get("stun_turns", 3)
+            atk_buff = skill.get("self_atk_buff", 10)
+            # Stun a TODOS menos al propio Green
+            all_figs = battle.p1_team + battle.p2_team
+            stunned_names = []
+            for fig in all_figs:
+                if fig is not attacker and fig["hp"] > 0:
+                    fig["stunned"] = True
+                    fig["stun_turns"] = stun_t
+                    stunned_names.append(fig["name"])
+            attacker["atk"] = attacker.get("atk", 0) + atk_buff
+            attacker["lights_out_buff_turns"] = skill.get("self_atk_buff_turns", 2)
+            battle.log.append(f"🟢 **{attacker['name']}** apaga las luces! 🌑")
+            battle.log.append(f"   😵 Stun {stun_t}T a todos: {', '.join(stunned_names)}")
+            battle.log.append(f"   ⚔️ Green +{atk_buff} ATK por {skill.get('self_atk_buff_turns',2)} turnos.")
+
+        elif stype == "ejected":
+            return_turns = skill.get("return_turns", 18)
+            second_form  = skill.get("second_form_key", attacker.get("key","") + "2")
+            # "Matar" al atacante y al defensor pero guardar info para retorno
+            attacker["ejected"] = True
+            attacker["ejected_return_turns"] = return_turns
+            attacker["ejected_second_form"]  = second_form
+            attacker["hp"] = 0
+            defender["hp"] = 0
+            battle.log.append(f"🚀 **{attacker['name']}** y **{defender['name']}** son expulsados al espacio...")
+            battle.log.append(f"   ☠️ Ambos 'mueren'... ¿o no? Si quedan figuras en pie en {return_turns} turnos, **vuelven**.")
+            # Guardar para el tick de turnos
+            battle.ejected_queue = getattr(battle, "ejected_queue", [])
+            battle.ejected_queue.append({
+                "attacker_key": attacker.get("key"),
+                "attacker_team": "p1" if attacker in battle.p1_team else "p2",
+                "attacker_idx": (battle.p1_team if attacker in battle.p1_team else battle.p2_team).index(attacker),
+                "second_form": second_form,
+                "turns_left": return_turns,
+            })
+
+        elif stype == "hide_and_seek":
+            hide_t = skill.get("hide_turns", 2)
+            dmg    = skill.get("power", 30)
+            attacker["hiding"] = True
+            attacker["hiding_turns"] = hide_t
+            attacker["hiding_strike_dmg"] = dmg
+            # Forzar cambio de figura aliada
+            atk_team     = battle.p1_team if battle.turn == 1 else battle.p2_team
+            atk_idx_attr = "p1_active" if battle.turn == 1 else "p2_active"
+            cur_idx = getattr(battle, atk_idx_attr)
+            for i, fig in enumerate(atk_team):
+                if i != cur_idx and fig["hp"] > 0:
+                    setattr(battle, atk_idx_attr, i)
+                    battle.log.append(f"⚪ **{attacker['name']}** se esconde... fuerza cambio a {fig['emoji']} {fig['name']}.")
+                    battle.log.append(f"   ⏳ En {hide_t} turnos atacará por {dmg} de daño.")
+                    break
+
+        elif stype == "rage_baiting":
+            if random.randint(1,100) <= 50:
+                # 50%: oponente -10 ATK por 3 turnos
+                defender["atk"] = max(0, defender.get("atk",0) - skill.get("atk_debuff",10))
+                defender["rage_bait_debuff_turns"] = skill.get("atk_debuff_turns",3)
+                battle.log.append(f"🟤 **{attacker['name']}** finge atacar... ¡el oponente cae en la trampa!")
+                battle.log.append(f"   ⬇️ {defender['name']} -10 ATK por 3 turnos.")
+            else:
+                # 50%: stun al oponente 3 turnos
+                defender["stunned"] = True
+                defender["stun_turns"] = skill.get("stun_turns",3)
+                battle.log.append(f"🟤 **{attacker['name']}** ¡ATACA REALMENTE! {defender['name']} queda stuneado 3 turnos.")
+
+        elif stype == "lulz_git_gut":
+            drain_pct = skill.get("hp_drain_pct", 80) / 100
+            self_dmg  = skill.get("self_dmg", 30)
+            hp_loss   = max(1, int(defender["hp"] * drain_pct))
+            defender["hp"] = max(0, defender["hp"] - hp_loss)
+            attacker["hp"] = max(0, attacker["hp"] - self_dmg)
+            battle.log.append(f"🟤 **{attacker['name']}** LULZ GIT GUT XD — ¡-{hp_loss} HP a {defender['name']}!")
+            battle.log.append(f"   💥 Maroon también pierde {self_dmg} HP por el esfuerzo.")
+
+        elif stype == "convincment":
+            # Pink y la figura activa enemiga mueren
+            attacker["hp"] = 0
+            defender["hp"] = 0
+            battle.log.append(f"🩷 **{attacker['name']}** y **{defender['name']}** llegan a un acuerdo...")
+            battle.log.append(f"   ✌️ Ambos se van de la batalla. Adiós.")
+
+        elif stype == "friendship_shield":
+            shield_t = skill.get("shield_turns", 10)
+            shield_h = skill.get("shield_hits", 5)
+            attacker["shield_turns"] = shield_t
+            attacker["shield_hits"]  = shield_h
+            battle.log.append(f"🩷 **{attacker['name']}** genera un escudo de amistad!")
+            battle.log.append(f"   🛡️ Absorbe {shield_h} ataques por {shield_t} turnos.")
+
+        elif stype == "flying_monstrosity":
+            hold_t = skill.get("hold_turns", 5)
+            attacker["flying_hold_turns"] = hold_t
+            attacker["stunned"] = True
+            attacker["stun_turns"] = hold_t
+            defender["flying_held_turns"] = hold_t
+            defender["stunned"] = True
+            defender["stun_turns"] = hold_t
+            # Forzar cambio de la figura enemiga
+            def_team     = battle.p2_team if battle.turn == 1 else battle.p1_team
+            def_idx_attr = "p2_active" if battle.turn == 1 else "p1_active"
+            for i, fig in enumerate(def_team):
+                if fig is not defender and fig["hp"] > 0:
+                    setattr(battle, def_idx_attr, i)
+                    break
+            battle.log.append(f"🟢 **{attacker['name']}** agarra a **{defender['name']}**!")
+            battle.log.append(f"   🔒 Ambos bloqueados {hold_t} turnos. Si Green sobrevive... {defender['name']} muere.")
+
+
             defender["absorbed_turns"] = 2
             absorbed_key    = defender.get("key", "")
             absorbed_skills = FIGURE_SKILLS.get(absorbed_key, [])
@@ -3217,24 +3420,68 @@ async def end_battle(interaction, battle: BattleState, channel_id: int, winner_t
     if p1_won or not battle.is_bot:
         winner_data = get_user(db, winner_id)
         if winner_data:
-            winner_data["wins"] = winner_data.get("wins", 0) + 1
-            winner_data["coins"] = winner_data.get("coins", 0) + COINS_WIN
-            winner_data["xp"] = winner_data.get("xp", 0) + XP_PER_WIN
-            while winner_data["xp"] >= xp_to_level_up(winner_data["level"]):
-                winner_data["xp"] -= xp_to_level_up(winner_data["level"])
-                winner_data["level"] += 1
-            # XP a las figuras del equipo ganador — con sistema de stat_up
-            team_keys = battle.p1_team_keys if p1_won else battle.p2_team_keys
-            leveled_figs = []
-            for fig_data in winner_data["figures"]:
-                if fig_data["key"] in team_keys:
-                    if fig_data.get("level", 1) < FIGURE_LEVEL_MAX:
-                        fig_data["xp"] = fig_data.get("xp", 0) + XP_PER_WIN // 3
-                        if check_figure_levelup(fig_data):
-                            leveled_figs.append(fig_data)
-            if leveled_figs:
-                fig_names = [FIGURES.get(fd["key"], {}).get("name", fd["key"]) for fd in leveled_figs]
-                embed.add_field(name="⬆️ ¡Level Up!", value=f"{'  '.join(fig_names)} subieron de nivel. Usa `/subirstat` para elegir tu mejora.", inline=False)
+            # ── Recompensas especiales 7v3 del Impostor Negro ────────────────
+            if getattr(battle, "impostor_7v3", False) and p1_won:
+                ts  = getattr(battle, "impostor_team_size", 3)
+                rew = IMPOSTOR_REWARDS.get(ts, IMPOSTOR_REWARDS[7])
+                winner_data["coins"] = winner_data.get("coins",0) + rew["coins"]
+                winner_data["xp"]    = winner_data.get("xp",0)    + rew["xp"]
+                _check_player_levelup(winner_data)
+                # Auto-niveles a las figuras del equipo
+                if rew["auto_levels"] > 0:
+                    for fd in winner_data.get("figures",[]):
+                        if fd["key"] in battle.p1_team_keys:
+                            for _ in range(rew["auto_levels"]):
+                                fd["level"] = min(FIGURE_LEVEL_MAX, fd.get("level",1) + 1)
+                # Recetas bonus
+                if rew["recipe_sheets"] > 0:
+                    all_recipe_ids = list(range(len(RECIPES))) if "RECIPES" in globals() else []
+                    owned_recipes  = winner_data.get("recipe_sheets",[])
+                    available_rec  = [r for r in all_recipe_ids if r not in owned_recipes]
+                    random.shuffle(available_rec)
+                    for r in available_rec[:rew["recipe_sheets"]]:
+                        winner_data.setdefault("recipe_sheets",[]).append(r)
+                # Logro
+                new_achs = check_achievements(winner_data, {"boss_id":"impostor_negro","team_size":ts})
+                rew_text = (
+                    f"{'🏆 ¡LOGRO DESBLOQUEADO! · ' if rew['achievement'] and new_achs else ''}"
+                    f"+{rew['coins']:,}🪙"
+                    + (f" · +{rew['auto_levels']} niveles auto" if rew["auto_levels"] else "")
+                    + (f" · +{rew['recipe_sheets']} receta(s)" if rew["recipe_sheets"] else "")
+                    + (f" · +{rew['xp']} XP" if rew["xp"] else "")
+                    + (f"\n*(Usaste {ts} figuras)*" if ts > 3 else "")
+                )
+                embed.add_field(name="🔪 Recompensas DEFEAT", value=rew_text, inline=False)
+                for aid in new_achs:
+                    ach = ACHIEVEMENTS.get(aid,{})
+                    embed.add_field(name=f"🏅 {ach.get('name','Logro')}", value=ach.get("desc",""), inline=True)
+            else:
+                # Recompensas normales
+                winner_data["wins"] = winner_data.get("wins", 0) + 1
+                winner_data["coins"] = winner_data.get("coins", 0) + COINS_WIN
+                winner_data["xp"] = winner_data.get("xp", 0) + XP_PER_WIN
+                _check_player_levelup(winner_data)
+                # XP a las figuras del equipo ganador
+                team_keys = battle.p1_team_keys if p1_won else battle.p2_team_keys
+                leveled_figs = []
+                for fig_data in winner_data["figures"]:
+                    if fig_data["key"] in team_keys:
+                        if fig_data.get("level", 1) < FIGURE_LEVEL_MAX:
+                            fig_data["xp"] = fig_data.get("xp", 0) + XP_PER_WIN // 3
+                            if check_figure_levelup(fig_data):
+                                leveled_figs.append(fig_data)
+                if leveled_figs:
+                    fig_names = [FIGURES.get(fd["key"], {}).get("name", fd["key"]) for fd in leveled_figs]
+                    embed.add_field(name="⬆️ ¡Level Up!", value=f"{'  '.join(fig_names)} subieron de nivel. Usa `/subirstat`.", inline=False)
+
+                # Logros normales
+                new_achs = check_achievements(winner_data, {
+                    "boss_id": getattr(battle, "bot_id", ""),
+                    "team_size": len(getattr(battle, "p1_team_keys", [])),
+                })
+                for aid in new_achs:
+                    ach = ACHIEVEMENTS.get(aid, {})
+                    embed.add_field(name=f"🏅 {ach.get('name','Logro')}", value=ach.get("desc",""), inline=True)
 
     # Recompensas al perdedor
     if not battle.is_bot or not p1_won:
@@ -3915,14 +4162,16 @@ BOT_ROSTER = [
     {
         "id": "impostor_negro",
         "name": "🔪 Impostor Negro",
-        "desc": "El mismo que conoces, pero entrenado para matar. Sus movimientos son letales.",
+        "desc": "7 impostores. Tú y 3 figuras. ¿Puedes con todos?",
         "difficulty": 8,
-        "team": ["boss_impostor1", "boss_impostor2", "blackout"],
+        "team": ["boss_impostor_red","boss_impostor_green","boss_impostor_white",
+                 "boss_impostor_maroon","boss_impostor_gray","boss_impostor_pink","blackout"],
         "level": 19,
         "hp_mult": 2.0, "atk_mult": 1.8, "energy_bonus": 18,
-        "reward_coins": 950,
+        "reward_coins": 4000,
         "reward_xp": 420,
         "is_boss": True,
+        "special_7v3": True,   # activa la selección de equipo y recompensas variables
     },
     {
         "id": "jefe",
@@ -4000,22 +4249,264 @@ FIGURE_SKILLS["boss_steve3"] = [
     {"name":"Ojos de Ender",  "cost":100,"type":"damage", "power":90,"force_switch":True,"force_switch_turns":3,"desc":"Sus ojos lanzan un rayo que bloquea a la figura 3 turnos."},
 ]
 
-# Impostor Negro (jefe)
-FIGURES["boss_impostor1"] = {"name":"Impostor Rojo","emoji":"🔴","rarity":"legendario","price":0,"hp":240,"attack":50,"defense":30,"speed":35,"image":""}
-FIGURES["boss_impostor2"] = {"name":"Impostor Blanco","emoji":"⚪","rarity":"legendario","price":0,"hp":220,"attack":45,"defense":35,"speed":40,"image":""}
-FIGURE_SKILLS["boss_impostor1"] = [
-    {"name":"Ventilación",   "cost":30,"type":"damage",  "power":35,"desc":"Se escapa por el ventilador y aparece detrás del rival."},
-    {"name":"Sabotaje",      "cost":60,"type":"dot",     "power":12,"dot_turns":4,"desc":"Sabotea el sistema: 12 daño/turno x4."},
-    {"name":"Emergency Meeting","cost":100,"type":"damage","power":80,"aoe":True,"aoe_secondary_power":45,"desc":"Llama a una reunión de emergencia y ataca a todos."},
-]
-FIGURE_SKILLS["boss_impostor2"] = [
-    {"name":"Cuchillo Veloz","cost":30,"type":"damage",  "power":32,"stun":True,"desc":"Lanza su cuchillo y aturde al rival."},
-    {"name":"Fake Task",     "cost":60,"type":"buff",    "power":0,"atk_buff":25,"desc":"Finge hacer una tarea para preparar un golpe masivo."},
-    {"name":"Sus",           "cost":100,"type":"damage", "power":85,"force_switch":True,"force_switch_turns":2,"desc":"El clásico. Elimina a la figura activa y la bloquea 2 turnos."},
+# ── FNF VS IMPOSTOR BOSS FIGHT ──────────────────────────────────────────────
+
+# RED IMPOSTOR
+FIGURES["boss_impostor_red"] = {"name":"Red Impostor","emoji":"🔴","rarity":"legendario","price":0,"hp":240,"attack":50,"defense":30,"speed":35,"image":""}
+FIGURE_SKILLS["boss_impostor_red"] = [
+    {
+        "name": "Impostor's Pose",
+        "cost": 30,
+        "type": "team_atk_buff",
+        "power": 0,
+        "atk_buff": 10,
+        "team_buff": False,  # solo a sí mismo
+        "desc": "Red hace una pose. Aunque parezca chistosa, da +10 ATK acumulable.",
+    },
+    {
+        "name": "Knife Cut",
+        "cost": 60,
+        "type": "damage",
+        "power": 20,
+        "desc": "Red hace un corte certero directo. 20 de daño.",
+    },
+    {
+        "name": "Gun Shot",
+        "cost": 100,
+        "type": "damage",
+        "power": 50,
+        "dot": True,
+        "dot_turns": 2,
+        "dot_power": 8,
+        "dot_type": "bleeding",
+        "desc": "Red dispara a la figura más cercana. 50 de daño + bleeding 2 turnos.",
+    },
 ]
 
-# Figuras exclusivas del jefe (versiones potenciadas)
-# --- Figuras exclusivas del jefe (price=0 = no aparecen en tienda) ---
+# GREEN IMPOSTOR — Forma 1 (pre-Ejected)
+FIGURES["boss_impostor_green"] = {"name":"Green Impostor","emoji":"🟢","rarity":"legendario","price":0,"hp":241,"attack":51,"defense":31,"speed":36,"image":"","passive":"green_new_form"}
+FIGURE_SKILLS["boss_impostor_green"] = [
+    {
+        "name": "Keep the Act",
+        "cost": 30,
+        "type": "keep_the_act",
+        "power": 0,
+        "bar_bonus": 50,
+        "cant_attack_turns": 2,
+        "desc": "Green finge ser tripulante. +50 barra, pero no puede atacar por 2 turnos.",
+    },
+    {
+        "name": "Lights Out",
+        "cost": 60,
+        "type": "lights_out",
+        "power": 0,
+        "stun_turns": 3,
+        "self_atk_buff": 10,
+        "self_atk_buff_turns": 2,
+        "desc": "Green apaga las luces. Stun 3T a amigos Y enemigos. Green recibe +10 ATK 2 turnos.",
+    },
+    {
+        "name": "Ejected",
+        "cost": 100,
+        "type": "ejected",
+        "power": 0,
+        "return_turns": 18,
+        "desc": "Green y la figura activa enemiga 'mueren'. Si en 18 turnos no acabas con el resto, ambos vuelven... Green con nueva forma.",
+    },
+]
+# GREEN IMPOSTOR — Forma 2 (post-Ejected)
+FIGURES["boss_impostor_green2"] = {"name":"Green Impostor II","emoji":"🟢","rarity":"mítico","price":0,"hp":241,"attack":51,"defense":31,"speed":36,"image":""}
+FIGURE_SKILLS["boss_impostor_green2"] = [
+    {
+        "name": "Sky Throw",
+        "cost": 30,
+        "type": "damage",
+        "power": 20,
+        "aoe": True,
+        "aoe_secondary_power": 10,
+        "desc": "Green sube al aire y se lanza en picada. 20 dmg al activo + 10 a sus aliados.",
+    },
+    {
+        "name": "Flying Monstrosity",
+        "cost": 60,
+        "type": "flying_monstrosity",
+        "power": 0,
+        "hold_turns": 5,
+        "desc": "Green agarra una figura enemiga. Ambos quedan bloqueados 5 turnos. Si sobrevive, la figura muere.",
+    },
+    {
+        "name": "Final Act",
+        "cost": 100,
+        "type": "consumed_fury",
+        "power": 0,
+        "splash_dmg": 40,
+        "desc": "Green agarra a todas las figuras enemigas y termina con todo. Mata al activo + 40 a los otros 2. Green muere.",
+    },
+]
+
+# WHITE IMPOSTOR
+FIGURES["boss_impostor_white"] = {"name":"White Impostor","emoji":"⚪","rarity":"legendario","price":0,"hp":260,"attack":42,"defense":52,"speed":59,"image":""}
+FIGURE_SKILLS["boss_impostor_white"] = [
+    {
+        "name": "Hide and Seek",
+        "cost": 30,
+        "type": "hide_and_seek",
+        "power": 30,
+        "hide_turns": 2,
+        "desc": "White se esconde. Fuerza cambio de figura aliada. En 2 turnos vuelve con 30 de daño a un enemigo.",
+    },
+    {
+        "name": "Fast Kill",
+        "cost": 60,
+        "type": "fast_kill",
+        "power": 60,
+        "charges_needed": 3,
+        "desc": "Igual que Black. Aprendió bien de su compañero. 3 usos seguidos, 60 de daño.",
+    },
+    {
+        "name": "TroubleMaker",
+        "cost": 100,
+        "type": "damage",
+        "power": 40,
+        "aoe": True,
+        "aoe_secondary_power": 20,
+        "dot": True,
+        "dot_turns": 20,
+        "dot_power": 5,
+        "dot_type": "bleeding",
+        "desc": "White ataca a todos. 40 al activo + 20 a los secundarios + bleeding 20 turnos a todos.",
+    },
+]
+
+# MAROON IMPOSTOR — Forma 1
+FIGURES["boss_impostor_maroon"] = {"name":"Maroon Impostor","emoji":"🟤","rarity":"legendario","price":0,"hp":250,"attack":40,"defense":50,"speed":45,"image":"","passive":"maroon_lol_you_thought"}
+FIGURE_SKILLS["boss_impostor_maroon"] = [
+    {
+        "name": "Rage Baiting",
+        "cost": 30,
+        "type": "rage_baiting",
+        "power": 0,
+        "chance": 50,
+        "atk_debuff_turns": 3,
+        "atk_debuff": 10,
+        "stun_turns": 3,
+        "desc": "50%: el oponente hace -10 ATK 3T. 50%: Maroon stun al oponente 3T.",
+    },
+    {
+        "name": "Bait Knife",
+        "cost": 60,
+        "type": "damage",
+        "power": 50,
+        "dot": True,
+        "dot_turns": 4,
+        "dot_power": 8,
+        "dot_type": "bleeding",
+        "desc": "Un cuchillo... no, una pistola. 50 de daño + bleeding 4 turnos.",
+    },
+    {
+        "name": "Volcano Comeback",
+        "cost": 100,
+        "type": "ejected",
+        "power": 0,
+        "return_turns": 18,
+        "second_form_key": "boss_impostor_maroon2",
+        "desc": "Maroon y la figura activa enemiga 'mueren'. Si en 18 turnos no acabas, vuelven. Maroon con nueva forma.",
+    },
+]
+# MAROON IMPOSTOR — Forma 2
+FIGURES["boss_impostor_maroon2"] = {"name":"Maroon Impostor II","emoji":"🟤","rarity":"mítico","price":0,"hp":250,"attack":40,"defense":50,"speed":45,"image":""}
+FIGURE_SKILLS["boss_impostor_maroon2"] = [
+    {
+        "name": "No more Games",
+        "cost": 30,
+        "type": "damage",
+        "power": 25,
+        "stun": True,
+        "stun_turns": 3,
+        "desc": "Maroon se lanza y remata con una tackleada voladora. 25 dmg + stun 3T.",
+    },
+    {
+        "name": "Nah Just Kidding...",
+        "cost": 60,
+        "type": "damage",
+        "power": 30,
+        "stun": True,
+        "stun_turns": 5,
+        "desc": "Finge 5 ataques en distintas direcciones, luego ataca de verdad. 30 dmg + stun 5T.",
+    },
+    {
+        "name": "LULZ GIT GUT XD",
+        "cost": 100,
+        "type": "lulz_git_gut",
+        "power": 30,
+        "hp_drain_pct": 80,
+        "self_dmg": 30,
+        "desc": "Ataca a una figura bajándole el 80% de su vida. Pero Maroon pierde 30 HP.",
+    },
+]
+
+# GRAY IMPOSTOR
+FIGURES["boss_impostor_gray"] = {"name":"Gray Impostor","emoji":"🩶","rarity":"legendario","price":0,"hp":275,"attack":54,"defense":39,"speed":42,"image":""}
+FIGURE_SKILLS["boss_impostor_gray"] = [
+    {
+        "name": "Childhood Trauma",
+        "cost": 30,
+        "type": "damage",
+        "power": 35,
+        "bar_drain": -20,   # negativo = recarga barra propia
+        "desc": "Gray no mira atrás. 35 de daño + +20 a su barra de carga.",
+    },
+    {
+        "name": "Maniatic Laugh",
+        "cost": 60,
+        "type": "revive_team",
+        "power": 20,
+        "revive_hp_pct": 50,
+        "heal_alive": 20,
+        "desc": "Gray se ríe malvadamente. Revive figuras muertas con 50% HP y cura 20 a las vivas.",
+    },
+    {
+        "name": "Consumed By Fury",
+        "cost": 100,
+        "type": "consumed_fury",
+        "power": 0,
+        "splash_dmg": 40,
+        "desc": "Aprendió de su padre muy bien. Mata al activo enemigo + 40 a los otros 2. Gray muere.",
+    },
+]
+
+# PINK IMPOSTOR
+FIGURES["boss_impostor_pink"] = {"name":"Pink Impostor","emoji":"🩷","rarity":"legendario","price":0,"hp":250,"attack":15,"defense":40,"speed":40,"image":""}
+FIGURE_SKILLS["boss_impostor_pink"] = [
+    {
+        "name": "Friendship",
+        "cost": 30,
+        "type": "heal_team_self",
+        "power": 20,
+        "desc": "Pink cura a todas las figuras aliadas +20 HP.",
+    },
+    {
+        "name": "Convincment",
+        "cost": 60,
+        "type": "convincment",
+        "power": 0,
+        "desc": "Pink y una figura enemiga 'llegan a un acuerdo'. Ambas mueren instantáneamente.",
+    },
+    {
+        "name": "Friendship Shield",
+        "cost": 100,
+        "type": "friendship_shield",
+        "power": 0,
+        "shield_turns": 10,
+        "shield_hits": 5,
+        "desc": "Pink genera un escudo que dura 10 turnos y absorbe 5 ataques.",
+    },
+]
+
+# Actualizar boss fight del Impostor Negro con el elenco completo
+# (se usa en BOT_BATTLES, se actualiza abajo)
+
+# ── FIGURAS EXCLUSIVAS DEL JEFE (versiones potenciadas) ─────────────────────
 FIGURES["antifas"] = {
     "name": "Antifas Antifasado",
     "emoji": "🦝",
@@ -4336,6 +4827,11 @@ def make_bot_fight_callback(bot_data, user, user_discord_id):
         db = load_db()
         usr = get_user(db, inter.user.id)
         owned = usr.get("figures", [])
+
+        # ── Batalla especial 7v3 del Impostor Negro ───────────────────────
+        if bot_data.get("special_7v3"):
+            await _start_impostor_7v3(inter, bot_data, owned, usr, db)
+            return
 
         team_indices = usr.get("team", [None, None, None])
         p1_keys, p1_figs_data = [], []
@@ -5220,7 +5716,7 @@ async def lobster_cmd(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 # --- ORO (solo admins) ---
-@bot.tree.command(name="oro", description="[ADMIN] Regala monedas a un usuario")
+@bot.tree.command(name="oro", description="[GAMER64] Regala monedas a un usuario")
 @app_commands.describe(usuario="Usuario al que regalar monedas", cantidad="Cantidad de monedas a regalar")
 async def oro(interaction: discord.Interaction, usuario: discord.Member, cantidad: int):
     if interaction.user.id != 1236293193893412975:
@@ -5283,7 +5779,7 @@ async def reset_battle(interaction: discord.Interaction):
         await interaction.response.send_message("❌ No hay ninguna batalla activa en este canal.", ephemeral=True)
 
 # --- BOMB (solo admins) ---
-@bot.tree.command(name="bomb", description="[ADMIN] Quita monedas a un usuario")
+@bot.tree.command(name="bomb", description="[GAMER64] Quita monedas a un usuario")
 @app_commands.describe(usuario="Usuario objetivo", cantidad="Monedas a quitar")
 async def bomb(interaction: discord.Interaction, usuario: discord.Member, cantidad: int):
     if not is_admin(interaction):
@@ -5308,7 +5804,7 @@ async def bomb(interaction: discord.Interaction, usuario: discord.Member, cantid
     await interaction.response.send_message(embed=embed)
 
 # --- NUKE (solo admins) ---
-@bot.tree.command(name="nuke", description="[ADMIN] Resetea a un usuario a nivel 1")
+@bot.tree.command(name="nuke", description="[GAMER64] Resetea a un usuario a nivel 1")
 @app_commands.describe(usuario="Usuario a nukear")
 async def nuke(interaction: discord.Interaction, usuario: discord.Member):
     if not is_admin(interaction):
@@ -5903,6 +6399,11 @@ async def cook_cmd(interaction: discord.Interaction):
                                 break
                 global_recipe_count += 1
                 user2["recipe_count"] = user2.get("recipe_count", 0) + 1
+                # Logros de receta
+                new_achs = check_achievements(user2, {"action": "cook"})
+                if new_achs:
+                    ach_names = [ACHIEVEMENTS[a]["name"] for a in new_achs]
+                    await interaction.followup.send(f"🏅 ¡Logro desbloqueado! {' · '.join(ach_names)}", ephemeral=True)
                 # XP al jugador por cocinar
                 user2["xp"] = user2.get("xp", 0) + 20
                 _check_player_levelup(user2)
@@ -6525,7 +7026,7 @@ def pick_exploration_reward(user: dict) -> dict:
                 user["recipe_sheets"].append(sheet["recipe_idx"])
                 return {"type": "recipe_sheet", "desc": f"📜 ¡Hoja de receta: {sheet['name']}!"}
             elif reward["type"] == "figure":
-                buyable = [k for k, v in FIGURES.items() if v.get("price", 0) > 0 and k not in ("roblox_boss", "janedoe", "santa_vaca", "lobster")]
+                buyable = [k for k, v in FIGURES.items() if v.get("price", 0) > 0 and k not in ("roblox_boss", "janedoe", "santa_vaca", "lobster", "holy_cow", "og_gamer64")]
                 if buyable:
                     fig_key = random.choice(buyable)
                     user["figures"].append({"key": fig_key, "level": 1, "xp": 0})
@@ -7209,7 +7710,7 @@ async def subir_stat_cmd(interaction: discord.Interaction):
                     await asyncio.sleep(1)
                     await subir_stat_cmd.callback(inter)
             return cb
-        btn.callback = await make_cb(stat_key, label, idx)
+        btn.callback = make_cb(stat_key, label, idx)
         view.add_item(btn)
 
     await interaction.response.send_message(embed=embed, view=view)
@@ -7242,7 +7743,7 @@ _base_check_figure_levelup = check_figure_levelup
 # --- SAY (solo matheogamer64) ---
 GAMER_ID = 1236293193893412975
 
-@bot.tree.command(name="say", description="[GAMER] Con este comando, puedes hacer que el bot diga lo que quieras")
+@bot.tree.command(name="say", description="[GAMER64] Hace que el bot diga lo que quieras")
 @app_commands.describe(mensaje="Lo que dirá el bot")
 async def say(interaction: discord.Interaction, mensaje: str):
     if interaction.user.id != GAMER_ID:
@@ -7253,61 +7754,12 @@ async def say(interaction: discord.Interaction, mensaje: str):
     await interaction.channel.send(mensaje)
 
 
-# --- HOLY (solo usuario especial — NO aparece en /ayuda) ---
-HOLY_USER_ID = 1236293193893412975
-
-@bot.tree.command(name="holy", description="...")
-async def holy_cmd(interaction: discord.Interaction):
-    if interaction.user.id != HOLY_USER_ID:
-        await interaction.response.send_message("❌ ...", ephemeral=True)
-        return
-
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-
-    # Añadir Santa Vaca a su colección
-    user["figures"].append({"key": "santa_vaca", "level": 1, "xp": 0})
-    # Añadir como ingrediente también
-    if "ingredients" not in user: user["ingredients"] = {}
-    user["ingredients"]["🐮"] = user["ingredients"].get("🐮", 0) + 1
-    # Llenar equipo si hay huecos
-    team = user.get("team", [None, None, None])
-    while len(team) < 3: team.append(None)
-    for i in range(3):
-        if team[i] is None:
-            team[i] = len(user["figures"]) - 1
-            break
-    user["team"] = team
-    save_db(db)
-
-    embed = discord.Embed(
-        title="🐮 SANTA VACA HA APARECIDO",
-        description="No sabes cómo llegó hasta aquí.\nNo sabes qué quiere.\n\n**Pero ahora es tuya.**",
-        color=0xffffff
-    )
-    embed.add_field(name="❤️ HP",     value="1,234,567,890", inline=True)
-    embed.add_field(name="⚔️ ATK",    value="1,234,567,890", inline=True)
-    embed.add_field(name="⚡ VEL",    value="1,234,567,890", inline=True)
-    embed.add_field(name="✨ Habilidades", value=(
-        "🟡 **Holy!** — Evoluciona: +10B DEF y +1M ATK por 20 turnos\n"
-        "🟠 **Steak** — Cura 10T HP a todo el equipo\n"
-        "🔴 **GOD WHAT IS THAT-** — Mata a todas las figuras enemigas"
-    ), inline=False)
-    embed.add_field(name="🧑‍🍳 Ingrediente", value="La vaca también es un ingrediente de cocina.\nCombínala con una 🦞 Langosta para algo... especial.", inline=False)
-    embed.set_image(url="https://emblibrary.com/cdn/shop/files/M33422.jpg?v=1750188343&width=1214")
-    embed.set_footer(text="SANTA VACA! 🐮")
-    await interaction.response.send_message(embed=embed)
-
-
 # ============================================================
 #  COMANDOS /gift y /trade
 # ============================================================
 
 # --- GIFT ---
-@bot.tree.command(name="gift", description="Regala oro, figuras o ingredientes a otro usuario")
+@bot.tree.command(name="gift", description="[GAMER64] Regala oro, figuras o ingredientes a otro usuario")
 @app_commands.describe(usuario="Usuario al que regalar")
 async def gift(interaction: discord.Interaction, usuario: discord.Member):
     if interaction.user.id != 1236293193893412975:
@@ -8033,7 +8485,7 @@ async def learn_cmd(interaction: discord.Interaction):
                     save_db(db2)
                     await inter.response.edit_message(embed=build_learn_embed(u2), view=build_learn_view(u2))
                 return cb
-            btn.callback = await make_cb()
+            btn.callback = make_cb()
             view.add_item(btn)
         return view
 
@@ -8571,7 +9023,7 @@ async def _show_shop(interaction: discord.Interaction, shop_id: str, db, user, u
                 await inter.response.send_message(embed=ok, ephemeral=True)
             return buy_cb
         btn = discord.ui.Button(label=f"Comprar {fig['name']}", style=discord.ButtonStyle.success, custom_id=f"buy_{k}")
-        btn.callback = await make_buy()
+        btn.callback = make_buy()
         view.add_item(btn)
 
     # Sobres del Acertijo
@@ -8627,9 +9079,260 @@ async def _show_shop(interaction: discord.Interaction, shop_id: str, db, user, u
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 # ============================================================
+#  SISTEMA DE LOGROS
+# ============================================================
+ACHIEVEMENTS = {
+    # Progresión básica
+    "first_figure":     {"name":"🎭 Primera Figura",          "desc":"Compra tu primera figura.",                        "secret":False},
+    "first_win":        {"name":"🏆 Primera Victoria",         "desc":"Gana tu primera batalla.",                         "secret":False},
+    "wins_10":          {"name":"⚔️ Guerrero",                 "desc":"Gana 10 batallas.",                                "secret":False},
+    "wins_100":         {"name":"💀 Leyenda del PvP",          "desc":"Gana 100 batallas.",                               "secret":False},
+    "first_level":      {"name":"⬆️ ¡Subí de nivel!",          "desc":"Sube de nivel por primera vez (tú como jugador).", "secret":False},
+    "fig_first_level":  {"name":"⬆️ Mi figura creció",         "desc":"Sube de nivel una figura por primera vez.",        "secret":False},
+    "first_recipe":     {"name":"🧑‍🍳 Chef Novato",             "desc":"Descubre tu primera receta.",                      "secret":False},
+    "recipes_10":       {"name":"🧑‍🍳 Chef Profesional",        "desc":"Descubre 10 recetas.",                             "secret":False},
+    "first_explore":    {"name":"🗺️ Explorador Nato",          "desc":"Completa tu primera exploración.",                  "secret":False},
+    "reach_level_10":   {"name":"🌟 Nivel 10",                 "desc":"Llega al nivel 10 como jugador.",                  "secret":False},
+    "reach_level_30":   {"name":"🌟 Nivel 30",                 "desc":"Llega al nivel 30 como jugador.",                  "secret":False},
+    "reach_level_50":   {"name":"🌟 Nivel 50",                 "desc":"Llega al nivel 50 como jugador.",                  "secret":False},
+    "reach_level_100":  {"name":"👑 Nivel 100",                "desc":"Alcanza el nivel máximo como jugador.",             "secret":False},
+    "first_rebirth":    {"name":"🔄 Renacido",                 "desc":"Haz tu primer Rebirth.",                           "secret":False},
+    "first_combine":    {"name":"🔀 Fusionista",               "desc":"Combina figuras por primera vez.",                  "secret":False},
+    "first_learn":      {"name":"📚 Primer Conocimiento",      "desc":"Aprende tu primer nodo del árbol.",                "secret":False},
+    "mythic_owned":     {"name":"🔱 Coleccionista Mítico",     "desc":"Consigue una figura de rareza mítica.",            "secret":False},
+    "secret_store":     {"name":"🔒 El Código Correcto",       "desc":"Desbloquea la tienda secreta.",                    "secret":True},
+    # Boss fights
+    "beat_nino":        {"name":"👦 Niños al recreo",          "desc":"Derrota al Niño Random.",                          "secret":False},
+    "beat_paper":       {"name":"📄 Papel, Mármol, Tijeras",   "desc":"Derrota a Paper Mario.",                           "secret":False},
+    "beat_steve":       {"name":"⛏️ Minero Retirado",          "desc":"Derrota a Steve.",                                 "secret":False},
+    "beat_impostor_3":  {"name":"🔪 DEFEAT (3 figuras)",       "desc":"Vence al Impostor Negro con solo 3 figuras.",      "secret":False},
+    "beat_impostor_7":  {"name":"🔪 Hazlo con desventaja",     "desc":"Vence al Impostor Negro usando las 7 figuras.",    "secret":True},
+    "beat_antifas":     {"name":"💀 Jefe Supremo Derrotado",   "desc":"Derrota al Antifas Antifasado.",                   "secret":False},
+    # Misceláneos
+    "daily_streak_7":   {"name":"📅 Racha de 7 días",          "desc":"Mantén una racha diaria de 7 días seguidos.",      "secret":False},
+    "coins_10000":      {"name":"💰 Rico Rico",                 "desc":"Acumula 10,000 monedas a la vez.",                 "secret":False},
+    "fig_max_level":    {"name":"⬆️ Al Límite",                "desc":"Sube una figura al nivel máximo (30).",            "secret":False},
+}
+
+def grant_achievement(user_data: dict, achievement_id: str) -> bool:
+    """Da un logro al usuario si no lo tiene ya. Devuelve True si es nuevo."""
+    if achievement_id not in ACHIEVEMENTS:
+        return False
+    earned = user_data.setdefault("achievements", [])
+    if achievement_id in earned:
+        return False
+    earned.append(achievement_id)
+    return True
+
+def check_achievements(user_data: dict, context: dict) -> list[str]:
+    """
+    Verifica logros basados en el estado del usuario y el contexto de la acción.
+    context puede tener: action, wins, level, recipe_count, fig_level, coins, boss_id, team_size
+    Devuelve lista de IDs de logros nuevos conseguidos.
+    """
+    new = []
+    w   = user_data.get("wins", 0)
+    lvl = user_data.get("level", 1)
+    rc  = user_data.get("recipe_count", 0)
+    figs = user_data.get("figures", [])
+    coins = user_data.get("coins", 0)
+    action = context.get("action", "")
+
+    checks = {
+        "first_figure":    len(figs) >= 1,
+        "first_win":       w >= 1,
+        "wins_10":         w >= 10,
+        "wins_100":        w >= 100,
+        "first_level":     lvl >= 2,
+        "reach_level_10":  lvl >= 10,
+        "reach_level_30":  lvl >= 30,
+        "reach_level_50":  lvl >= 50,
+        "reach_level_100": lvl >= 100,
+        "first_recipe":    rc >= 1,
+        "recipes_10":      rc >= 10,
+        "first_rebirth":   user_data.get("rebirth_count", 0) >= 1,
+        "coins_10000":     coins >= 10000,
+        "mythic_owned":    any(FIGURES.get(f["key"],{}).get("rarity","").lower() in ("mítico","Mítico") for f in figs),
+        "fig_max_level":   any(f.get("level",1) >= FIGURE_LEVEL_MAX for f in figs),
+        "fig_first_level": any(f.get("level",1) >= 2 for f in figs),
+    }
+    # Basados en acción específica
+    if action == "explore":       checks["first_explore"] = True
+    if action == "combine":       checks["first_combine"] = True
+    if action == "learn":         checks["first_learn"]   = True
+    if action == "secret_store":  checks["secret_store"]  = True
+    if action == "daily_7":       checks["daily_streak_7"]= True
+
+    boss = context.get("boss_id", "")
+    ts   = context.get("team_size", 3)
+    if boss == "nino_random":    checks["beat_nino"]  = True
+    if boss == "paper_mario":    checks["beat_paper"] = True
+    if boss == "steve":          checks["beat_steve"] = True
+    if boss == "jefe":           checks["beat_antifas"] = True
+    if boss == "impostor_negro":
+        if ts <= 3:              checks["beat_impostor_3"] = True
+        if ts >= 7:              checks["beat_impostor_7"] = True
+
+    for aid, cond in checks.items():
+        if cond and grant_achievement(user_data, aid):
+            new.append(aid)
+    return new
+
+@bot.tree.command(name="logros", description="Ver tus logros conseguidos y los que faltan")
+async def logros_cmd(interaction: discord.Interaction):
+    db   = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    earned  = set(user.get("achievements", []))
+    total   = len(ACHIEVEMENTS)
+    done    = len(earned)
+
+    embed = discord.Embed(
+        title=f"🏅 Logros — {user['name']}",
+        description=f"**{done}/{total}** conseguidos",
+        color=0xf1c40f
+    )
+
+    # Agrupar: conseguidos primero, luego pendientes (secretos ocultos)
+    for aid, ach in ACHIEVEMENTS.items():
+        if aid in earned:
+            embed.add_field(
+                name=f"✅ {ach['name']}",
+                value=ach["desc"],
+                inline=True
+            )
+
+    pending = [(aid, ach) for aid, ach in ACHIEVEMENTS.items() if aid not in earned]
+    for aid, ach in pending:
+        if ach.get("secret"):
+            embed.add_field(name="🔒 ???", value="*Logro secreto*", inline=True)
+        else:
+            embed.add_field(name=f"⬜ {ach['name']}", value=ach["desc"], inline=True)
+
+    embed.set_footer(text=f"Completa acciones en el bot para desbloquear logros.")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# ── RECOMPENSAS VARIABLES DEL IMPOSTOR NEGRO (7v3) ──────────────────────────
+IMPOSTOR_REWARDS = {
+    3: {"coins": 4000, "recipe_sheets": 2, "auto_levels": 2,  "xp": 600,  "achievement": True},
+    4: {"coins": 2500, "recipe_sheets": 1, "auto_levels": 1,  "xp": 450,  "achievement": False},
+    5: {"coins": 1500, "recipe_sheets": 0, "auto_levels": 0,  "xp": 300,  "achievement": False},
+    6: {"coins": 500,  "recipe_sheets": 0, "auto_levels": 0,  "xp": 100,  "achievement": False},
+    7: {"coins": 0,    "recipe_sheets": 0, "auto_levels": 0,  "xp": 0,    "achievement": False},
+}
+
+async def _start_impostor_7v3(interaction: discord.Interaction, bot_data: dict, user_figs: list, user_data: dict, db):
+    """Muestra el menú de selección de figuras para la batalla 7v3 del Impostor Negro."""
+    uid = interaction.user.id
+
+    embed = discord.Embed(
+        title="🔪 DEFEAT — El Impostor Negro",
+        description=(
+            "**7 impostores** te esperan. Tú puedes llevar entre **3 y 7 figuras**.\n\n"
+            "⚠️ Cuantas más figuras uses, **peores recompensas** recibirás:\n"
+            "```\n"
+            "3 figuras → 4,000🪙 + 2 niveles auto + 2 recetas + LOGRO\n"
+            "4 figuras → 2,500🪙 + 1 nivel auto + 1 receta\n"
+            "5 figuras → 1,500🪙\n"
+            "6 figuras → 500🪙\n"
+            "7 figuras → Sin recompensa 💀\n"
+            "```\n"
+            "Elige cuántas figuras quieres usar:"
+        ),
+        color=0x2c2f33
+    )
+
+    view = discord.ui.View(timeout=60)
+    for count in range(3, 8):
+        r = IMPOSTOR_REWARDS[count]
+        lbl = f"{count} figuras"
+        if count == 3: lbl += " 👑"
+        if count == 7: lbl += " 💀"
+        btn = discord.ui.Button(
+            label=lbl,
+            style=discord.ButtonStyle.danger if count <= 3 else (discord.ButtonStyle.primary if count <= 5 else discord.ButtonStyle.secondary),
+            custom_id=f"impostor_team_{count}"
+        )
+        async def make_cb(team_size=count):
+            async def cb(inter: discord.Interaction):
+                if inter.user.id != uid:
+                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                # Seleccionar figuras del usuario (las primeras N del equipo + relleno)
+                chosen_figs = []
+                team_indices = user_data.get("team", [None, None, None])
+                figs_list    = user_data.get("figures", [])
+                # Primero las del equipo activo
+                for idx in team_indices:
+                    if idx is not None and idx < len(figs_list) and len(chosen_figs) < team_size:
+                        chosen_figs.append(figs_list[idx])
+                # Rellenar con otras figuras si el jugador quiere más de 3
+                if team_size > 3:
+                    team_set = set(id(f) for f in chosen_figs)
+                    for f in figs_list:
+                        if len(chosen_figs) >= team_size:
+                            break
+                        if id(f) not in team_set:
+                            chosen_figs.append(f)
+                            team_set.add(id(f))
+
+                # Iniciar la batalla con equipo especial
+                await _launch_7v3_battle(inter, bot_data, chosen_figs, user_data, db, team_size)
+            return cb
+        btn.callback = make_cb()
+        view.add_item(btn)
+
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+async def _launch_7v3_battle(interaction, bot_data, player_figs, user_data, db, team_size):
+    """Lanza la batalla 7v3 con el equipo elegido."""
+    channel_id = interaction.channel_id
+    if channel_id in active_battles:
+        await interaction.response.send_message("❌ Ya hay una batalla activa en este canal.", ephemeral=True)
+        return
+
+    p1_team = []
+    for fd in player_figs[:team_size]:
+        try:
+            p1_team.append(make_fighter(fd["key"], fd))
+        except Exception:
+            pass
+
+    p2_team = []
+    for bk in bot_data["team"]:
+        if bk in FIGURES:
+            fd_bot = {"level": bot_data.get("level", 1), "xp": 0, "stat_ups": {}}
+            p2_team.append(make_fighter(
+                bk, fd_bot,
+                hp_mult=bot_data.get("hp_mult", 1.0),
+                atk_mult=bot_data.get("atk_mult", 1.0),
+                energy_bonus=bot_data.get("energy_bonus", 0)
+            ))
+
+    battle = BattleState(
+        p1=interaction.user.id, p2=0,
+        p1_team=p1_team, p2_team=p2_team,
+        p1_name=user_data.get("name","Jugador"), p2_name=bot_data["name"],
+        is_bot=True
+    )
+    battle.p1_team_keys = [fd["key"] for fd in player_figs[:team_size]]
+    battle.impostor_7v3 = True
+    battle.impostor_team_size = team_size
+
+    active_battles[channel_id] = battle
+
+    embed = battle.get_embed(title=f"🔪 DEFEAT — {bot_data['name']}")
+    embed.set_footer(text=f"Usas {team_size} figuras · Recompensa: {IMPOSTOR_REWARDS[team_size]['coins']:,}🪙")
+    view  = get_battle_view(battle, channel_id)
+    await interaction.response.edit_message(embed=embed, view=view)
+
+# ============================================================
 #  /secret-store — Tienda secreta (no aparece en /ayuda)
 # ============================================================
-@bot.tree.command(name="secret-store", description="???")
+@bot.tree.command(name="secret-store", description="[GAMER64] Accede a la tienda secreta con figuras míticas")
 @app_commands.describe(codigo="Código de acceso (si no lo sabes, buena suerte)")
 async def secret_store(interaction: discord.Interaction, codigo: str = ""):
     uid = interaction.user.id
@@ -8726,11 +9429,166 @@ async def secret_store(interaction: discord.Interaction, codigo: str = ""):
             style=discord.ButtonStyle.danger,
             custom_id=f"secret_buy_{key}"
         )
-        btn.callback = await make_buy_cb()
+        btn.callback = make_buy_cb()
         view.add_item(btn)
 
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
+
+
+# ============================================================
+#  /get — [GAMER64] Conseguir cualquier figura del juego
+# ============================================================
+@bot.tree.command(name="get", description="[GAMER64] Consigue cualquier figura existente en el juego")
+async def get_cmd(interaction: discord.Interaction):
+    if interaction.user.id != SECRET_OWNER_ID:
+        await interaction.response.send_message("❌ No tienes permiso.", ephemeral=True)
+        return
+
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    # Todas las figuras excepto lobster (ingrediente, no figura de pelea)
+    all_figs = {k: v for k, v in FIGURES.items() if k != "lobster"}
+
+    # Agrupar por rareza para el select
+    rarity_order = ["común", "raro", "épico", "epico", "legendario", "Legendario", "mítico", "Mítico"]
+    def rarity_sort(item):
+        r = item[1].get("rarity", "común").lower()
+        order = ["común", "raro", "épico", "legendario", "mítico"]
+        for i, o in enumerate(order):
+            if o in r: return i
+        return 99
+
+    sorted_figs = sorted(all_figs.items(), key=rarity_sort)
+
+    # Dividir en páginas de 25 (límite de Discord para selects)
+    PAGE_SIZE = 25
+    pages = []
+    page = []
+    for k, v in sorted_figs:
+        page.append((k, v))
+        if len(page) == PAGE_SIZE:
+            pages.append(page)
+            page = []
+    if page:
+        pages.append(page)
+
+    total_pages = len(pages)
+    state = {"page": 0}
+
+    def make_select(page_idx):
+        page_figs = pages[page_idx]
+        options = []
+        for k, v in page_figs:
+            star = RARITY_STARS.get(v.get("rarity", "común"), "⚪")
+            owned = any(f["key"] == k for f in user.get("figures", []))
+            label = f"{'✅ ' if owned else ''}{v['name']}"[:100]
+            desc = f"{v.get('rarity','común').upper()} | HP:{v['hp']} ATK:{v['attack']}"[:100]
+            options.append(discord.SelectOption(
+                label=label,
+                value=k,
+                description=desc,
+                emoji=star
+            ))
+        sel = discord.ui.Select(
+            placeholder=f"Elige una figura... (Página {page_idx+1}/{total_pages})",
+            options=options,
+            min_values=1,
+            max_values=1
+        )
+        async def select_cb(si: discord.Interaction):
+            if si.user.id != interaction.user.id:
+                await si.response.send_message("❌ No es tu menú.", ephemeral=True)
+                return
+            chosen_key = sel.values[0]
+            chosen_fig = FIGURES.get(chosen_key)
+            db2 = load_db()
+            u2 = get_user(db2, si.user.id)
+            already = any(f["key"] == chosen_key for f in u2.get("figures", []))
+            if already:
+                await si.response.send_message(
+                    f"⚠️ Ya tienes a **{chosen_fig['name']}** {chosen_fig['emoji']}.",
+                    ephemeral=True
+                )
+                return
+            new_fig = {"key": chosen_key, "level": 1, "xp": 0}
+            if chosen_key == "oggamer64":
+                new_fig["og_phase"] = 1
+            u2.setdefault("figures", []).append(new_fig)
+            team = u2.get("team", [None, None, None])
+            for i in range(len(team)):
+                if team[i] is None:
+                    team[i] = len(u2["figures"]) - 1
+                    break
+            u2["team"] = team
+            save_db(db2)
+            star = RARITY_STARS.get(chosen_fig.get("rarity", "común"), "⚪")
+            embed2 = discord.Embed(
+                title=f"✅ ¡{chosen_fig['emoji']} {chosen_fig['name']} obtenida!",
+                description=f"{star} {chosen_fig.get('rarity','común').upper()} | HP:{chosen_fig['hp']} ATK:{chosen_fig['attack']} DEF:{chosen_fig['defense']}",
+                color=0x2ecc71
+            )
+            await si.response.send_message(embed=embed2, ephemeral=True)
+        sel.callback = select_cb
+        return sel
+
+    def make_view(page_idx):
+        view = discord.ui.View(timeout=120)
+        view.add_item(make_select(page_idx))
+        if page_idx > 0:
+            prev = discord.ui.Button(label="◀ Anterior", style=discord.ButtonStyle.secondary)
+            async def prev_cb(pi: discord.Interaction):
+                if pi.user.id != interaction.user.id:
+                    await pi.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                state["page"] -= 1
+                await pi.response.edit_message(
+                    embed=make_embed(state["page"]),
+                    view=make_view(state["page"])
+                )
+            prev.callback = prev_cb
+            view.add_item(prev)
+        if page_idx < total_pages - 1:
+            nxt = discord.ui.Button(label="Siguiente ▶", style=discord.ButtonStyle.secondary)
+            async def next_cb(ni: discord.Interaction):
+                if ni.user.id != interaction.user.id:
+                    await ni.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                state["page"] += 1
+                await ni.response.edit_message(
+                    embed=make_embed(state["page"]),
+                    view=make_view(state["page"])
+                )
+            nxt.callback = next_cb
+            view.add_item(nxt)
+        return view
+
+    def make_embed(page_idx):
+        page_figs = pages[page_idx]
+        embed = discord.Embed(
+            title="🗂️ [GAMER64] Conseguir figura",
+            description=f"Selecciona cualquier figura para añadirla a tu colección.\nPágina **{page_idx+1}/{total_pages}** | {len(all_figs)} figuras totales",
+            color=0x2c2c2c
+        )
+        for k, v in page_figs:
+            owned = any(f["key"] == k for f in user.get("figures", []))
+            star = RARITY_STARS.get(v.get("rarity","común"), "⚪")
+            embed.add_field(
+                name=f"{'✅ ' if owned else ''}{v['emoji']} {v['name']} {star}",
+                value=f"{v.get('rarity','común').upper()} | HP:{v['hp']} ATK:{v['attack']}",
+                inline=True
+            )
+        return embed
+
+    await interaction.response.send_message(
+        embed=make_embed(0),
+        view=make_view(0),
+        ephemeral=True
+    )
 
 # ============================================================
 #  ARRANQUE
