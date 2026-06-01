@@ -372,7 +372,7 @@ FIGURES = {
         "attack": 35,
         "defense": 28,
         "speed": 45,
-        "image": "https://upload.wikimedia.org/wikipedia/en/e/e5/Kirby_%28character%29.png",
+        "image": "https://img.game8.co/4092785/c895e06343bf482671553caf4e460344.jpeg/show",
         "passive": "kirby_transform",
     },
     # ── FIGURAS SECRETAS (solo en /secret-store) ─────────────────
