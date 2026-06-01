@@ -13,7 +13,6 @@ import time
 app = Flask('')
 
 # Clave secreta para el backup — cambiala en Render como variable de entorno BACKUP_KEY
-BACKUP_KEY = os.getenv("BACKUP_KEY", "mateo_backup_2024")
 
 @app.route('/')
 def home(): return "Bot Online"
@@ -121,7 +120,7 @@ def create_user(db, user_id, display_name):
 FIGURES = {
     "gamer64": {
         "name": "Gamer64",
-        "emoji": "<:GamerNew:1506838491491729498>",
+        "emoji": "<:GamerNew:1511129412681076797>",
         "rarity": "raro",
         "price": 640,
         "hp": 142,
@@ -143,7 +142,7 @@ FIGURES = {
     },
     "alex": {
         "name": "Alex",
-        "emoji": "<:Neomoji:1506838331315458058>",
+        "emoji": "<:Klin:1511129452036362372>",
         "rarity": "legendario",
         "price": 215,
         "hp": 250,
@@ -378,7 +377,7 @@ FIGURES = {
     # ── FIGURAS SECRETAS (solo en /secret-store) ─────────────────
     "og_gamer64": {
         "name": "OG GAMER 64",
-        "emoji": "<a:GamerOld:1507162327794057377>",
+        "emoji": "<a:Parpadeo:1511129354745413695>",
         "rarity": "Mítico",
         "price": 99999,
         "hp": 235,
