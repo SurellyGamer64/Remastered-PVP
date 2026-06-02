@@ -9549,6 +9549,174 @@ async def secret_store(interaction: discord.Interaction, codigo: str = ""):
 
 
 # ============================================================
+#  /get — Pase dorado exclusivo [GAMER64]
+# ============================================================
+GET_AUTHORIZED_ID = 1236293193893412975
+
+@bot.tree.command(name="get", description="[GAMER64] El pase dorado y exclusivo...")
+async def get_cmd(interaction: discord.Interaction):
+    if interaction.user.id != GET_AUTHORIZED_ID:
+        await interaction.response.send_message("❌ No tienes acceso a este comando.", ephemeral=True)
+        return
+
+    db   = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    uid = interaction.user.id
+
+    # Agrupar figuras por rareza para el menú
+    rarity_order = ["común", "raro", "épico", "epico", "legendario", "Legendario", "mítico", "Mítico"]
+    rarity_label = {
+        "común": "⚪ Común", "raro": "🔵 Raro",
+        "épico": "🟣 Épico", "epico": "🟣 Épico",
+        "legendario": "🌟 Legendario", "Legendario": "🌟 Legendario",
+        "mítico": "🔱 Mítico", "Mítico": "🔱 Mítico",
+    }
+
+    # Todas las figuras disponibles (incluyendo secretas y exclusivas de jefe)
+    all_figs = {k: v for k, v in FIGURES.items() if v.get("name")}
+
+    # Organizar por rareza
+    by_rarity = {}
+    for key, fig in all_figs.items():
+        r = fig.get("rarity", "común")
+        by_rarity.setdefault(r, []).append((key, fig))
+
+    def build_get_embed():
+        embed = discord.Embed(
+            title="🥇 PASE DORADO — /get",
+            description="Elige una rareza para ver las figuras disponibles.\nPuedes obtener **cualquier figura** del juego.",
+            color=0xffd700
+        )
+        for r in rarity_order:
+            figs_in_r = by_rarity.get(r, [])
+            if not figs_in_r:
+                continue
+            names = " · ".join(f"{f['emoji']} {f['name']}" for _, f in figs_in_r[:10])
+            if len(figs_in_r) > 10:
+                names += f" *(+{len(figs_in_r)-10} más)*"
+            label = rarity_label.get(r, r)
+            embed.add_field(name=f"{label} ({len(figs_in_r)})", value=names, inline=False)
+        embed.set_footer(text="Selecciona una rareza con los botones de abajo.")
+        return embed
+
+    def build_rarity_view():
+        view = discord.ui.View(timeout=180)
+        seen = set()
+        for r in rarity_order:
+            if r in seen or not by_rarity.get(r):
+                continue
+            seen.add(r)
+            label = rarity_label.get(r, r)
+            styles = {
+                "común": discord.ButtonStyle.secondary,
+                "raro": discord.ButtonStyle.primary,
+                "épico": discord.ButtonStyle.primary,
+                "epico": discord.ButtonStyle.primary,
+                "legendario": discord.ButtonStyle.success,
+                "Legendario": discord.ButtonStyle.success,
+                "mítico": discord.ButtonStyle.danger,
+                "Mítico": discord.ButtonStyle.danger,
+            }
+            btn = discord.ui.Button(
+                label=label,
+                style=styles.get(r, discord.ButtonStyle.secondary),
+                custom_id=f"get_rarity_{r}"
+            )
+            async def make_rarity_cb(rarity=r):
+                async def cb(inter: discord.Interaction):
+                    if inter.user.id != uid:
+                        await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                        return
+                    await _show_get_figures(inter, rarity, by_rarity, uid, db)
+                return cb
+            btn.callback = await make_rarity_cb()
+            view.add_item(btn)
+        return view
+
+    await interaction.response.send_message(
+        embed=build_get_embed(),
+        view=build_rarity_view(),
+        ephemeral=True
+    )
+
+async def _show_get_figures(interaction: discord.Interaction, rarity: str, by_rarity: dict, uid: int, db):
+    """Muestra las figuras de una rareza para que Gamer64 elija cuál obtener."""
+    figs_in_r = by_rarity.get(rarity, [])
+    rarity_label = {
+        "común":"⚪ Común","raro":"🔵 Raro","épico":"🟣 Épico","epico":"🟣 Épico",
+        "legendario":"🌟 Legendario","Legendario":"🌟 Legendario",
+        "mítico":"🔱 Mítico","Mítico":"🔱 Mítico",
+    }
+
+    embed = discord.Embed(
+        title=f"🥇 {rarity_label.get(rarity, rarity)} — Elige una figura",
+        color=0xffd700
+    )
+    for key, fig in figs_in_r:
+        embed.add_field(
+            name=f"{fig['emoji']} {fig['name']}",
+            value=(f"❤️ {fig.get('hp','?')} ⚔️ {fig.get('attack','?')} "
+                   f"🛡️ {fig.get('defense','?')} ⚡ {fig.get('speed','?')}"),
+            inline=True
+        )
+
+    # Botones de selección (máx 25 por Discord, paginamos si hay más)
+    view = discord.ui.View(timeout=180)
+    for key, fig in figs_in_r[:20]:
+        async def make_fig_cb(fig_key=key, fig_data=fig):
+            async def cb(inter: discord.Interaction):
+                if inter.user.id != uid:
+                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                db2  = load_db()
+                u2   = get_user(db2, inter.user.id)
+                u2.setdefault("figures", []).append({"key": fig_key, "level": 1, "xp": 0})
+                # Auto-equipar si hay hueco
+                team = u2.get("team", [None, None, None])
+                while len(team) < 3:
+                    team.append(None)
+                for i in range(3):
+                    if team[i] is None:
+                        team[i] = len(u2["figures"]) - 1
+                        break
+                u2["team"] = team
+                save_db(db2)
+                ok = discord.Embed(
+                    title=f"✅ ¡{fig_data['name']} obtenida!",
+                    description=f"{fig_data['emoji']} **{fig_data['name']}** añadida a tu colección.",
+                    color=0xffd700
+                )
+                if fig_data.get("image"):
+                    ok.set_thumbnail(url=fig_data["image"])
+                await inter.response.edit_message(embed=ok, view=None)
+            return cb
+        btn = discord.ui.Button(
+            label=fig["name"][:20],
+            style=discord.ButtonStyle.success,
+            custom_id=f"get_fig_{key}",
+            emoji=fig["emoji"] if not fig["emoji"].startswith("<") else None
+        )
+        btn.callback = await make_fig_cb()
+        view.add_item(btn)
+
+    # Botón volver
+    back_btn = discord.ui.Button(label="◀ Volver", style=discord.ButtonStyle.secondary, custom_id="get_back")
+    async def back_cb(inter: discord.Interaction):
+        if inter.user.id != uid:
+            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+            return
+        await get_cmd.callback(inter)
+    back_btn.callback = back_cb
+    view.add_item(back_btn)
+
+    await interaction.response.edit_message(embed=embed, view=view)
+
+
+# ============================================================
 #  ARRANQUE
 # ============================================================
 bot.run(TOKEN)
