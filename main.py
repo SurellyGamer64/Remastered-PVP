@@ -384,7 +384,7 @@ FIGURES = {
         "attack": 1,
         "defense": 1,
         "speed": 1,
-        "image": "https://static.wikia.nocookie.net/undertale/images/1/1b/Sans_battle.png",
+        "image": "https://wallpapers.com/images/hd/sans-1348-x-1080-background-nxod9vxwx18awbl1.jpg",
         "passive": "sans_miss",
     },
     # ── FIGURAS SECRETAS (solo en /secret-store) ─────────────────
