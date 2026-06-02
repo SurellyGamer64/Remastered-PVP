@@ -2,38 +2,62 @@
   "users": {
     "1236293193893412975": {
       "name": "Gamer64",
-      "coins": 99700102,
+      "coins": 99700202,
       "figures": [
         {
           "key": "og_gamer64",
           "level": 1,
-          "xp": 16
+          "xp": 32
         },
         {
           "key": "og_gamer64",
           "level": 1,
-          "xp": 16
+          "xp": 32
         },
         {
           "key": "og_gamer64",
+          "level": 1,
+          "xp": 32
+        },
+        {
+          "key": "sans",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "boss_paper1",
+          "level": 1,
+          "xp": 16
+        },
+        {
+          "key": "boss_impostor_green",
           "level": 1,
           "xp": 16
         }
       ],
       "team": [
         0,
-        1,
-        2
+        4,
+        5
       ],
-      "wins": 1,
+      "wins": 2,
       "losses": 0,
-      "level": 1,
-      "xp": 50,
+      "level": 2,
+      "xp": 0,
       "ingredients": {
         "🐮": 1,
         "🥚": -1
       },
-      "recipe_count": 1
+      "recipe_count": 1,
+      "skill_points": 1,
+      "achievements": [
+        "first_figure",
+        "first_win",
+        "first_level",
+        "first_recipe",
+        "coins_10000",
+        "mythic_owned"
+      ]
     },
     "1411518770362454046": {
       "name": "Michi",
@@ -51,12 +75,18 @@
     },
     "1384663451648921610": {
       "name": "Klin",
-      "coins": 15001,
-      "figures": [],
+      "coins": 14551,
+      "figures": [
+        {
+          "key": "guest1337",
+          "level": 1,
+          "xp": 0
+        }
+      ],
       "team": [
-        null,
-        null,
-        null
+        0,
+        0,
+        0
       ],
       "wins": 0,
       "losses": 0,
