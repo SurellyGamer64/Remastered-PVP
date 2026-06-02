@@ -1130,12 +1130,12 @@ def make_fighter(fig_key, owner_fig_data, hp_mult=1.0, atk_mult=1.0, energy_bonu
         fighter["passive_torment_active"] = False
         fighter["passive_torment_turns"] = 0
 
-    # Pasiva de Sans: MISS — esquiva 40 ataques, se duerme en 30, buff al despertar
+    # Pasiva de Sans: MISS — barra de misses (120), 5 oportunidades vacías, luego daño normal
     if fig_key == "sans":
-        fighter["sans_dodges_left"] = 40   # esquives totales
-        fighter["sans_dodges_done"] = 0    # ataques esquivados hasta ahora
-        fighter["sans_sleeping"]    = False
-        fighter["sans_woken"]       = False  # ya recibió el buff al despertar
+        fighter["sans_misses"]       = 120  # barra de misses (se gasta 10 por esquive)
+        fighter["sans_empty_chances"]= 5    # oportunidades con barra vacía antes de recibir daño
+        fighter["sans_sleeping"]     = False
+        fighter["sans_woken"]        = False
 
     return fighter
 
@@ -1269,21 +1269,45 @@ class BattleState:
         type_emoji = {"damage":"⚔️","heal":"💚","drain":"⚡","drain_fill":"🔴","parry":"🛡️","buff":"⭐","gamble":"🎲","gamble_fire":"🔥","team_atk_buff":"⭐","dot":"💣","bad_update":"🔳","ban_hammer":"🔨"}
         skill_info = ""
         for sk in f1["skills"]:
-            can = f1["energy"] >= sk["cost"]
+            if sk.get("type") == "sans_rest":
+                can = f1["energy"] > 0
+                cost_display = f"{f1['energy']}⚡" if f1["energy"] > 0 else "0⚡"
+            else:
+                can = f1["energy"] >= sk["cost"]
+                cost_display = f"{sk['cost']}⚡"
             lock = "✅" if can else "🔒"
             t = type_emoji.get(sk["type"], "⚡")
-            skill_info += f"{lock} {t} **{sk['name']}** `[{sk['cost']}⚡]`\n"
+            skill_info += f"{lock} {t} **{sk['name']}** `[{cost_display}]`\n"
+
+        # Barra de Misses para Sans
+        sans_bar = ""
+        if f1.get("key") == "sans":
+            misses = f1.get("sans_misses", 0)
+            empty  = f1.get("sans_empty_chances", 0)
+            miss_filled = min(12, misses // 10)
+            miss_bar = "🟦" * miss_filled + "⬛" * (12 - miss_filled)
+            sans_bar = f"**Misses:** {miss_bar} `{misses}` | Oportunidades vacías: `{empty}/5`\n"
 
         embed.add_field(
             name=f"🔵 {p1_label} — {f1['emoji']} {f1['name']}",
             value=(
                 f"**Vida:** {self.hp_bar(f1['hp'], f1['max_hp'])}\n"
                 f"**Energía (tuya):** {self.energy_bar(f1['energy'], 'blue')}\n"
+                f"{sans_bar}"
                 f"─────────────────\n"
                 f"{skill_info}"
             ),
             inline=False
         )
+
+        # Barra de Misses del rival si es Sans
+        sans_bar_rival = ""
+        if f2.get("key") == "sans":
+            misses2 = f2.get("sans_misses", 0)
+            empty2  = f2.get("sans_empty_chances", 0)
+            miss_filled2 = min(12, misses2 // 10)
+            miss_bar2 = "🟦" * miss_filled2 + "⬛" * (12 - miss_filled2)
+            sans_bar_rival = f"**Misses:** {miss_bar2} `{misses2}` | Oportunidades: `{empty2}/5`\n"
 
         # --- Figura activa P2: energía visible (roja) ---
         embed.add_field(
@@ -1291,6 +1315,7 @@ class BattleState:
             value=(
                 f"**Vida:** {self.hp_bar(f2['hp'], f2['max_hp'])}\n"
                 f"**Energía (rival):** {self.energy_bar(f2['energy'], 'red')}\n"
+                f"{sans_bar_rival}"
             ),
             inline=False
         )
@@ -1390,13 +1415,18 @@ def get_battle_view(battle: BattleState):
         skills_to_show = all_skills
 
     for i, skill in enumerate(skills_to_show):
-        # Calcular índice real dentro de f["skills"] para make_skill_callback
         real_idx = f["skills"].index(skill) if skill in f["skills"] else i
-        can_use = f["energy"] >= skill["cost"]
+        # Rest de Sans: coste = toda la energía actual (usable si energy > 0)
+        if skill.get("type") == "sans_rest":
+            can_use  = f["energy"] > 0
+            cost_lbl = f"{f['energy']}⚡" if f["energy"] > 0 else "0⚡"
+        else:
+            can_use  = f["energy"] >= skill["cost"]
+            cost_lbl = f"{skill['cost']}⚡"
         t_emoji = type_emoji.get(skill["type"], "⚡")
         style = discord.ButtonStyle.danger if can_use else discord.ButtonStyle.secondary
         btn = discord.ui.Button(
-            label=f"{t_emoji} {skill['name']} [{skill['cost']}⚡]",
+            label=f"{t_emoji} {skill['name']} [{cost_lbl}]",
             style=style,
             disabled=not can_use,
             custom_id=f"skill_{real_idx}",
@@ -1691,28 +1721,40 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             battle.log.append(f"   🦴 ¡La **Bone Barrier** de Sans bloquea el ataque y hace {barrier_dmg} de daño a {attacker['name']}!")
             dmg = 0
 
-        # Pasiva Sans: MISS — esquiva ataques
-        if dmg > 0 and defender.get("key") == "sans" and not defender.get("sans_sleeping") and defender.get("sans_dodges_left", 0) > 0:
-            defender["sans_dodges_done"] = defender.get("sans_dodges_done", 0) + 1
-            defender["sans_dodges_left"] = defender.get("sans_dodges_left", 40) - 1
-            done = defender["sans_dodges_done"]
-            left = defender["sans_dodges_left"]
-            battle.log.append(f"   <:SANS:1511160523775807588> **Sans** esquiva el ataque! ({done} esquivados · {left} restantes)")
-            # A los 30 esquives, se duerme 1 turno
-            if done == 30 and not defender.get("sans_woken"):
-                defender["sans_sleeping"] = True
-                defender["stunned"]      = True
-                defender["stun_turns"]   = 1
-                battle.log.append(f"   😴 Sans... se está durmiendo... (30 esquives) Atácalo ahora!")
-            dmg = 0
+        # Pasiva Sans: MISS — barra de misses
+        if dmg > 0 and defender.get("key") == "sans" and not defender.get("sans_sleeping"):
+            misses     = defender.get("sans_misses", 0)
+            empty_left = defender.get("sans_empty_chances", 0)
+
+            if misses > 0:
+                # Tiene barra — esquiva y gasta 10
+                defender["sans_misses"] = misses - 10
+                remaining = defender["sans_misses"]
+                battle.log.append(f"   <:SANS:1511160523775807588> **Sans** esquiva! [🟦 Misses: {remaining}/120]")
+                # A los 30 misses gastados (90 restantes) se duerme
+                if misses == 30 and not defender.get("sans_woken"):
+                    defender["sans_sleeping"] = True
+                    defender["stunned"]       = True
+                    defender["stun_turns"]    = 1
+                    battle.log.append(f"   😴 Sans... se está durmiendo... ¡Atácalo ahora!")
+                dmg = 0
+
+            elif empty_left > 0:
+                # Barra vacía — pierde una oportunidad pero igual esquiva
+                defender["sans_empty_chances"] = empty_left - 1
+                left = empty_left - 1
+                battle.log.append(f"   <:SANS:1511160523775807588> **Sans** aún esquiva... pero está exhausto. ({left} oportunidades restantes)")
+                if left == 0:
+                    battle.log.append(f"   💀 ¡Sans ya no puede esquivar más!")
+                dmg = 0
+            # Si misses=0 y empty_left=0 → cae el daño normal
 
         # Despertar de Sans — si estaba dormido y lo atacan, recibe buff
         if dmg > 0 and defender.get("key") == "sans" and defender.get("sans_sleeping") and not defender.get("sans_woken"):
             defender["sans_sleeping"] = False
             defender["sans_woken"]    = True
-            # Buff de +40 ATK por el resto de la batalla
             defender["atk"] = defender.get("atk", 1) + 40
-            battle.log.append(f"   😤 **Sans** despertó... y está MUY molesto. +40 ATK permanente!")
+            battle.log.append(f"   😤 **Sans** despertó furioso. +40 ATK permanente!")
 
         defender["hp"] = max(0, defender["hp"] - dmg)
         # Parry check
@@ -1731,7 +1773,13 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 battle.log.append(f"   ⚡ **{defender['emoji']} {defender['name']}** hace **COUNTER** y devuelve **{counter_dmg}** daño!")
     else:
         skill = attacker["skills"][skill_idx]
-        if attacker["energy"] < skill["cost"]:
+        # Rest de Sans: coste especial (consume toda la energía, se maneja en el stype)
+        if skill.get("type") == "sans_rest":
+            if attacker.get("energy", 0) <= 0:
+                await interaction.response.send_message("❌ No tienes energía para descansar.", ephemeral=True)
+                return
+            # No descontar aquí — el stype lo maneja
+        elif attacker["energy"] < skill["cost"]:
             await interaction.response.send_message("❌ No tienes suficiente energía.", ephemeral=True)
             return
 
@@ -1740,7 +1788,9 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             attacker["fast_kill_charges"] = 0
             battle.log.append(f"   ⚠️ **{attacker['name']}** interrumpió la carga de **Fast Kill**!")
 
-        attacker["energy"] -= skill["cost"]
+        # sans_rest maneja su propio consumo de energía
+        if skill.get("type") != "sans_rest":
+            attacker["energy"] -= skill["cost"]
         stype = skill["type"]
 
         if stype == "damage":
@@ -2946,6 +2996,17 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             attacker["bone_barrier_dmg"] = skill.get("power", 15)
             battle.log.append(f"🦴 **Sans** genera una barrera de huesos...")
             battle.log.append(f"   🛡️ El próximo ataque será bloqueado y hará {skill.get('power',15)} de daño al atacante.")
+
+        elif stype == "sans_rest":
+            energy_now = attacker.get("energy", 0)
+            if energy_now <= 0:
+                battle.log.append(f"   <:SANS:1511160523775807588> **Sans** intenta descansar... pero no tiene energía que convertir.")
+            else:
+                attacker["energy"] = 0
+                old_misses = attacker.get("sans_misses", 0)
+                attacker["sans_misses"] = old_misses + energy_now
+                battle.log.append(f"   <:SANS:1511160523775807588> **Sans** descansa un momento...")
+                battle.log.append(f"   🟦 +{energy_now} Misses! [{old_misses} → {attacker['sans_misses']}]")
 
         elif stype == "love_check":
             kills = _get_love_kills(battle, attacker)
@@ -4607,6 +4668,13 @@ FIGURE_SKILLS["sans"] = [
         "type": "damage",
         "power": 50,
         "desc": "Sans dispara un láser con su Gaster Blaster. 50 de daño.",
+    },
+    {
+        "name": "Rest",
+        "cost": 0,          # Gasta TODA la energía que tengas
+        "type": "sans_rest",
+        "power": 0,
+        "desc": "Sans descansa un momento... Convierte toda su energía actual en Misses. Coste: toda tu barra de energía.",
     },
     {
         "name": "LOVE Check",
