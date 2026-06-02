@@ -121,7 +121,7 @@ def create_user(db, user_id, display_name):
 FIGURES = {
     "gamer64": {
         "name": "Gamer64",
-        "emoji": "<:GamerNew:1506838491491729498>",
+        "emoji": "<:GamerNew:1511129412681076797>",
         "rarity": "raro",
         "price": 640,
         "hp": 142,
@@ -143,7 +143,7 @@ FIGURES = {
     },
     "alex": {
         "name": "Alex",
-        "emoji": "<:Neomoji:1506838331315458058>",
+        "emoji": "<:Klin:1511129452036362372>",
         "rarity": "legendario",
         "price": 215,
         "hp": 250,
@@ -375,10 +375,22 @@ FIGURES = {
         "image": "https://upload.wikimedia.org/wikipedia/en/e/e5/Kirby_%28character%29.png",
         "passive": "kirby_transform",
     },
+    "sans": {
+        "name": "Sans",
+        "emoji": "<:SANS:1511160523775807588>",
+        "rarity": "mítico",
+        "price": 2015,
+        "hp": 1,
+        "attack": 1,
+        "defense": 1,
+        "speed": 1,
+        "image": "https://static.wikia.nocookie.net/undertale/images/1/1b/Sans_battle.png",
+        "passive": "sans_miss",
+    },
     # ── FIGURAS SECRETAS (solo en /secret-store) ─────────────────
     "og_gamer64": {
         "name": "OG GAMER 64",
-        "emoji": "<a:GamerOld:1507162327794057377>",
+        "emoji": "<a:Parpadeo:1511129354745413695>",
         "rarity": "Mítico",
         "price": 99999,
         "hp": 235,
@@ -1101,6 +1113,7 @@ def make_fighter(fig_key, owner_fig_data, hp_mult=1.0, atk_mult=1.0, energy_bonu
         "skills":       FIGURE_SKILLS.get(fig_key, FIGURE_SKILLS["gamer64"]),
         "image":        fig.get("image", ""),
         "skill_upgrades": owner_fig_data.get("skill_upgrades_by_idx", {}),
+        "total_kills": 0,   # kills en esta batalla (para LOVE Check en batalla)
     }
     # Pasiva de Gamer64: revive una vez con el 80% de su HP máximo
     if fig_key == "gamer64":
@@ -1116,6 +1129,14 @@ def make_fighter(fig_key, owner_fig_data, hp_mult=1.0, atk_mult=1.0, energy_bonu
     if fig_key == "ringmaster":
         fighter["passive_torment_active"] = False
         fighter["passive_torment_turns"] = 0
+
+    # Pasiva de Sans: MISS — esquiva 40 ataques, se duerme en 30, buff al despertar
+    if fig_key == "sans":
+        fighter["sans_dodges_left"] = 40   # esquives totales
+        fighter["sans_dodges_done"] = 0    # ataques esquivados hasta ahora
+        fighter["sans_sleeping"]    = False
+        fighter["sans_woken"]       = False  # ya recibió el buff al despertar
+
     return fighter
 
 class BattleState:
@@ -1661,6 +1682,38 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             defender["shield_hits"] -= 1
             battle.log.append(f"   🩷 ¡El **Escudo de Amistad** absorbe el golpe! ({defender['shield_hits']} hits restantes)")
             dmg = 0
+
+        # Bone Barrier de Sans — bloquea y hace daño al atacante
+        if dmg > 0 and defender.get("bone_barrier"):
+            defender["bone_barrier"] = False
+            barrier_dmg = defender.get("bone_barrier_dmg", 15)
+            attacker["hp"] = max(0, attacker["hp"] - barrier_dmg)
+            battle.log.append(f"   🦴 ¡La **Bone Barrier** de Sans bloquea el ataque y hace {barrier_dmg} de daño a {attacker['name']}!")
+            dmg = 0
+
+        # Pasiva Sans: MISS — esquiva ataques
+        if dmg > 0 and defender.get("key") == "sans" and not defender.get("sans_sleeping") and defender.get("sans_dodges_left", 0) > 0:
+            defender["sans_dodges_done"] = defender.get("sans_dodges_done", 0) + 1
+            defender["sans_dodges_left"] = defender.get("sans_dodges_left", 40) - 1
+            done = defender["sans_dodges_done"]
+            left = defender["sans_dodges_left"]
+            battle.log.append(f"   <:SANS:1511160523775807588> **Sans** esquiva el ataque! ({done} esquivados · {left} restantes)")
+            # A los 30 esquives, se duerme 1 turno
+            if done == 30 and not defender.get("sans_woken"):
+                defender["sans_sleeping"] = True
+                defender["stunned"]      = True
+                defender["stun_turns"]   = 1
+                battle.log.append(f"   😴 Sans... se está durmiendo... (30 esquives) Atácalo ahora!")
+            dmg = 0
+
+        # Despertar de Sans — si estaba dormido y lo atacan, recibe buff
+        if dmg > 0 and defender.get("key") == "sans" and defender.get("sans_sleeping") and not defender.get("sans_woken"):
+            defender["sans_sleeping"] = False
+            defender["sans_woken"]    = True
+            # Buff de +40 ATK por el resto de la batalla
+            defender["atk"] = defender.get("atk", 1) + 40
+            battle.log.append(f"   😤 **Sans** despertó... y está MUY molesto. +40 ATK permanente!")
+
         defender["hp"] = max(0, defender["hp"] - dmg)
         # Parry check
         if defender.get("parrying"):
@@ -2885,7 +2938,27 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 battle.log.append(f"   {' · '.join(hit)}")
             battle.log.append(f"   ☠️ Burning {dot_dmg}/turno por {dot_t} turnos!")
 
-    # ¿Cayó el defensor?
+        # ── SANS ─────────────────────────────────────────────────────
+
+        elif stype == "bone_barrier":
+            # Activa la barrera: el siguiente ataque recibido se bloquea y hace 15 daño al atacante
+            attacker["bone_barrier"] = True
+            attacker["bone_barrier_dmg"] = skill.get("power", 15)
+            battle.log.append(f"🦴 **Sans** genera una barrera de huesos...")
+            battle.log.append(f"   🛡️ El próximo ataque será bloqueado y hará {skill.get('power',15)} de daño al atacante.")
+
+        elif stype == "love_check":
+            kills = _get_love_kills(battle, attacker)
+            dmg   = kills * skill.get("dmg_per_kill", 20)
+            if dmg <= 0:
+                dmg = 1
+                battle.log.append(f"<:SANS:1511160523775807588> **Sans** mira tus pecados... no has matado a nadie aún. Pero algo es algo.")
+            else:
+                battle.log.append(f"<:SANS:1511160523775807588> **Sans** mira todos tus pecados... has matado a **{kills}** figuras.")
+                battle.log.append(f"   ☠️ **{kills} × 20 = {dmg}** de daño. Hora de pagar.")
+            defender["hp"] = max(0, defender["hp"] - dmg)
+
+
     if defender["hp"] <= 0:
         # Pasiva de Gamer64: revive una vez con 80% HP
         if defender.get("passive_revive"):
@@ -2950,6 +3023,10 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             new_fig = def_team[next_idx]
             battle.log.append(f"💀 **{defender['name']}** fue derrotado!")
             battle.log.append(f"🔄 ¡Entra **{new_fig['emoji']} {new_fig['name']}**!")
+            # Registrar kill en el atacante para el LOVE Check de Sans
+            attacker["total_kills"] = attacker.get("total_kills", 0) + 1
+            # También guardar en la DB del usuario para kills globales (LOVE Check permanente)
+            _register_kill_for_love(attacker.get("owner_id"), battle)
             battle.turn = 2 if battle.turn == 1 else 1
             await finish_turn(interaction, battle, channel_id)
             return
@@ -4033,7 +4110,7 @@ BOT_ROSTER = [
     },
     {
         "id": "impostor_negro",
-        "name": "🔪 Impostor Negro",
+        "name": "🔪 BLACK IMPOSTOR",
         "desc": "7 impostores. Tú y 3 figuras. ¿Puedes con todos?",
         "difficulty": 8,
         "team": ["boss_impostor_red","boss_impostor_green","boss_impostor_white",
@@ -4043,7 +4120,7 @@ BOT_ROSTER = [
         "reward_coins": 4000,
         "reward_xp": 420,
         "is_boss": True,
-        "special_7v3": True,   # activa la selección de equipo y recompensas variables
+        "special_7v3": True,
     },
     {
         "id": "jefe",
@@ -4514,6 +4591,32 @@ KIRBY_TRANSFORMED_SLOT0 = {
     "desc": "Kirby escupe la habilidad absorbida y regresa a sus habilidades por defecto.",
 }
 FIGURE_SKILLS["kirby"] = list(KIRBY_DEFAULT_SKILLS)
+
+# ── SANS ─────────────────────────────────────────────────────────
+FIGURE_SKILLS["sans"] = [
+    {
+        "name": "Bone Barrier",
+        "cost": 30,
+        "type": "bone_barrier",
+        "power": 15,
+        "desc": "Sans genera una barrera de huesos. Si el enemigo ataca, la barrera bloquea y hace 15 de daño al atacante.",
+    },
+    {
+        "name": "Gaster Blaster",
+        "cost": 60,
+        "type": "damage",
+        "power": 50,
+        "desc": "Sans dispara un láser con su Gaster Blaster. 50 de daño.",
+    },
+    {
+        "name": "LOVE Check",
+        "cost": 100,
+        "type": "love_check",
+        "power": 0,
+        "dmg_per_kill": 20,
+        "desc": "Sans mira todos tus pecados... El daño es igual al número de figuras matadas por el oponente ×20.",
+    },
+]
 
 # ── OG GAMER 64 — habilidades por fase ─────────────────────────
 # Las habilidades cambian según la fase activa (1-4).
@@ -8151,6 +8254,34 @@ async def execute_trade(inter: discord.Interaction, trade_state, orig_inter, tar
 # ============================================================
 PLAYER_LEVEL_MAX = 100
 
+def _register_kill_for_love(owner_id, battle=None):
+    """Registra un kill en la DB del jugador para el LOVE Check de Sans (permanente)."""
+    if not owner_id:
+        return
+    try:
+        db = load_db()
+        user = get_user(db, owner_id)
+        if user:
+            user["total_kills"] = user.get("total_kills", 0) + 1
+            save_db(db)
+    except Exception:
+        pass
+
+def _get_love_kills(battle, attacker) -> int:
+    """Devuelve el total de kills del atacante: kills en batalla + kills globales en DB."""
+    battle_kills = attacker.get("total_kills", 0)
+    # Intentar leer kills globales si hay owner_id
+    owner_id = attacker.get("owner_id")
+    if owner_id:
+        try:
+            db = load_db()
+            user = get_user(db, owner_id)
+            if user:
+                return user.get("total_kills", 0)
+        except Exception:
+            pass
+    return battle_kills
+
 def _check_player_levelup(user_data: dict) -> list[int]:
     """Sube el nivel del jugador. Por cada nivel nuevo da 1 skill point."""
     new_levels = []
@@ -9187,11 +9318,18 @@ async def _launch_7v3_battle(interaction, bot_data, player_figs, user_data, db, 
         return
 
     p1_team = []
+    valid_figs = []
     for fd in player_figs[:team_size]:
         try:
-            p1_team.append(make_fighter(fd["key"], fd))
+            fighter = make_fighter(fd["key"], fd)
+            p1_team.append(fighter)
+            valid_figs.append(fd)
         except Exception:
             pass
+
+    if not p1_team:
+        await interaction.response.send_message("❌ No tienes figuras válidas para la batalla.", ephemeral=True)
+        return
 
     p2_team = []
     for bk in bot_data["team"]:
@@ -9204,22 +9342,37 @@ async def _launch_7v3_battle(interaction, bot_data, player_figs, user_data, db, 
                 energy_bonus=bot_data.get("energy_bonus", 0)
             ))
 
+    if not p2_team:
+        await interaction.response.send_message("❌ Error al cargar los enemigos.", ephemeral=True)
+        return
+
     battle = BattleState(
         p1=interaction.user.id, p2=0,
         p1_team=p1_team, p2_team=p2_team,
         p1_name=user_data.get("name","Jugador"), p2_name=bot_data["name"],
         is_bot=True
     )
-    battle.p1_team_keys = [fd["key"] for fd in player_figs[:team_size]]
-    battle.impostor_7v3 = True
+    battle.p1_team_keys  = [fd["key"] for fd in valid_figs]
+    battle.p2_team_keys  = [bk for bk in bot_data["team"] if bk in FIGURES]
+    battle.bot_id        = bot_data.get("id", "")
+    battle.impostor_7v3  = True
     battle.impostor_team_size = team_size
 
     active_battles[channel_id] = battle
 
     embed = battle.get_embed(title=f"🔪 DEFEAT — {bot_data['name']}")
     embed.set_footer(text=f"Usas {team_size} figuras · Recompensa: {IMPOSTOR_REWARDS[team_size]['coins']:,}🪙")
-    view  = get_battle_view(battle, channel_id)
-    await interaction.response.edit_message(embed=embed, view=view)
+    view = get_battle_view(battle, channel_id)
+
+    # La interacción viene del botón del menú de selección (ya respondida con send_message)
+    # así que usamos edit_message para actualizar ese mensaje ephemeral
+    try:
+        await interaction.response.edit_message(embed=embed, view=view)
+    except Exception:
+        try:
+            await interaction.edit_original_response(embed=embed, view=view)
+        except Exception:
+            await interaction.followup.send(embed=embed, view=view)
 
 # ============================================================
 #  /secret-store — Tienda secreta (no aparece en /ayuda)
