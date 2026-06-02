@@ -9626,14 +9626,14 @@ async def get_cmd(interaction: discord.Interaction):
                 style=styles.get(r, discord.ButtonStyle.secondary),
                 custom_id=f"get_rarity_{r}"
             )
-            async def make_rarity_cb(rarity=r):
+            def make_rarity_cb(rarity=r):
                 async def cb(inter: discord.Interaction):
                     if inter.user.id != uid:
                         await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
                         return
                     await _show_get_figures(inter, rarity, by_rarity, uid, db)
                 return cb
-            btn.callback = await make_rarity_cb()
+            btn.callback = make_rarity_cb()
             view.add_item(btn)
         return view
 
@@ -9667,7 +9667,7 @@ async def _show_get_figures(interaction: discord.Interaction, rarity: str, by_ra
     # Botones de selección (máx 25 por Discord, paginamos si hay más)
     view = discord.ui.View(timeout=180)
     for key, fig in figs_in_r[:20]:
-        async def make_fig_cb(fig_key=key, fig_data=fig):
+        def make_fig_cb(fig_key=key, fig_data=fig):
             async def cb(inter: discord.Interaction):
                 if inter.user.id != uid:
                     await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
@@ -9675,7 +9675,6 @@ async def _show_get_figures(interaction: discord.Interaction, rarity: str, by_ra
                 db2  = load_db()
                 u2   = get_user(db2, inter.user.id)
                 u2.setdefault("figures", []).append({"key": fig_key, "level": 1, "xp": 0})
-                # Auto-equipar si hay hueco
                 team = u2.get("team", [None, None, None])
                 while len(team) < 3:
                     team.append(None)
@@ -9700,7 +9699,7 @@ async def _show_get_figures(interaction: discord.Interaction, rarity: str, by_ra
             custom_id=f"get_fig_{key}",
             emoji=fig["emoji"] if not fig["emoji"].startswith("<") else None
         )
-        btn.callback = await make_fig_cb()
+        btn.callback = make_fig_cb()
         view.add_item(btn)
 
     # Botón volver
