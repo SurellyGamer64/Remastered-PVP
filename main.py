@@ -387,6 +387,40 @@ FIGURES = {
         "image": "https://static.wikia.nocookie.net/undertale/images/1/1b/Sans_battle.png",
         "passive": "sans_miss",
     },
+    "papyrus": {
+        "name": "Papyrus",
+        "emoji": "<:NYEH:1511554121482899616>",
+        "rarity": "legendario",
+        "price": 1154,
+        "hp": 280,
+        "attack": 18,
+        "defense": 20,
+        "speed": 30,
+        "image": "https://preview.redd.it/my-3d-interpretation-of-papyrus-from-undertale-all-made-v0-nab5n5ucfwpa1.png?width=1080&crop=smart&auto=webp&s=56dc099ee82d768490b1579826f2684091f873ab",
+    },
+    "flowey": {
+        "name": "Flowey",
+        "emoji": "<:Flowey:1511554261996277830>",
+        "rarity": "legendario",
+        "price": 1500,
+        "hp": 190,
+        "attack": 19,
+        "defense": 10,
+        "speed": 35,
+        "image": "https://cdn.displate.com/artwork/380x270/2024-11-05/1b25b88f-3cd6-4f28-a47c-4bcfe464fd11.jpg",
+        "passive": "omega_evolution",
+    },
+    "omega_flowey": {
+        "name": "OMEGA FLOWEY",
+        "emoji": "<:OMEGA:1511553995578019910>",
+        "rarity": "legendario",
+        "price": 0,   # no comprable, solo se obtiene al evolucionar Flowey
+        "hp": 299,
+        "attack": 29,
+        "defense": 25,
+        "speed": 35,
+        "image": "https://static.wikitide.net/atrociousgameplaywiki/f/f0/Omega_Flowey.png",
+    },
     # ── FIGURAS SECRETAS (solo en /secret-store) ─────────────────
     "og_gamer64": {
         "name": "OG GAMER 64",
@@ -1927,6 +1961,12 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 defender["energy"] = max(0, defender.get("energy", 0) - drain_amt)
                 battle.log.append(f"   ⚡ ¡La barra de energía de **{defender['name']}** se redujo **{drain_amt}⚡**!")
 
+            # def_debuff — baja defensa permanente (Spaghetti!)
+            if skill.get("def_debuff"):
+                dd = skill["def_debuff"]
+                defender["defense"] = max(0, defender.get("defense", 0) - dd)
+                battle.log.append(f"   🛡️ {defender['name']} pierde **{dd}** de defensa permanentemente!")
+
             # team_atk_buff inline en damage (Chaos Control)
             if skill.get("team_atk_buff"):
                 buff_val = skill["team_atk_buff"]
@@ -2941,6 +2981,7 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
 
 
             defender["absorbed_turns"] = 2
+            defender["absorbed_by_kirby"] = True
             absorbed_key    = defender.get("key", "")
             absorbed_skills = FIGURE_SKILLS.get(absorbed_key, [])
             if absorbed_key == "og_gamer64":
@@ -2968,6 +3009,31 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             if not swapped:
                 battle.log.append(f"🌸 **Kirby** absorbe a **{defender['emoji']} {defender['name']}**!")
                 battle.log.append(f"   😵 {defender['name']} desaparece **2 turnos** y Kirby copia sus habilidades!")
+
+            # Logros de Kirby
+            try:
+                db_ach = load_db()
+                u_ach  = get_user(db_ach, battle.p1)
+                if u_ach:
+                    new_achs = []
+                    is_second_form = (
+                        absorbed_key in ("omega_flowey","boss_impostor_green2","boss_impostor_maroon2") or
+                        (absorbed_key == "og_gamer64" and defender.get("og_phase", 1) >= 2)
+                    )
+                    if is_second_form and grant_achievement(u_ach, "kirby_no_mas"):
+                        new_achs.append("kirby_no_mas")
+                    if absorbed_key == "omega_flowey":
+                        if grant_achievement(u_ach, "kirby_no_mas"):
+                            new_achs.append("kirby_no_mas")
+                        if grant_achievement(u_ach, "kirby_no_entendiste"):
+                            new_achs.append("kirby_no_entendiste")
+                    if new_achs:
+                        save_db(db_ach)
+                        for aid in new_achs:
+                            ach = ACHIEVEMENTS.get(aid, {})
+                            battle.log.append(f"   🏅 ¡Logro desbloqueado! **{ach.get('name','?')}**")
+            except Exception:
+                pass
 
         elif stype == "kirby_spit":
             attacker["skills"] = list(KIRBY_DEFAULT_SKILLS)
@@ -3022,6 +3088,121 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 battle.log.append(f"   ☠️ **{kills} × 20 = {dmg}** de daño. Hora de pagar.")
             defender["hp"] = max(0, defender["hp"] - dmg)
 
+        # ── PAPYRUS ──────────────────────────────────────────────
+
+        elif stype == "papyrus_pose":
+            atk_b = skill.get("atk_buff", 10)
+            def_b = skill.get("def_buff", 10)
+            attacker["atk"]     = attacker.get("atk", 0) + atk_b
+            attacker["defense"] = attacker.get("defense", 0) + def_b
+            battle.log.append(f"💀 **Papyrus** hace una pose increíblemente genial! NYEH HEH HEH!")
+            battle.log.append(f"   ⚔️ +{atk_b} ATK · 🛡️ +{def_b} DEF permanentes!")
+
+        elif stype == "papyrus_laugh":
+            self_h = skill.get("self_heal", 35)
+            ally_h = skill.get("ally_heal", 20)
+            attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + self_h)
+            atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+            healed = []
+            for fig in atk_team:
+                if fig is not attacker and fig["hp"] > 0:
+                    fig["hp"] = min(fig["max_hp"], fig["hp"] + ally_h)
+                    healed.append(f"{fig['emoji']} {fig['name']} +{ally_h}HP")
+            battle.log.append(f"💀 **{attacker['name']}**: NYEH HEH HEH! ¡A seguir luchando!")
+            battle.log.append(f"   💚 {attacker['name']} +{self_h}HP" + (f" · {' · '.join(healed)}" if healed else ""))
+
+        # ── FLOWEY ───────────────────────────────────────────────
+
+        elif stype == "flowey_save_reload":
+            uses = attacker.get("save_reload_uses", 0)
+            if uses == 0:
+                # Primer uso: guardar estado
+                snapshot = {
+                    "hp":      attacker["hp"],
+                    "atk":     attacker.get("atk", 0),
+                    "defense": attacker.get("defense", 0),
+                    "energy":  attacker.get("energy", 0),
+                }
+                atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+                def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+                snapshot["team_hps_atk"] = [f["hp"] for f in atk_team]
+                snapshot["team_hps_def"] = [f["hp"] for f in def_team]
+                attacker["save_snapshot"] = snapshot
+                attacker["save_reload_uses"] = 1
+                battle.log.append(f"🌼 **Flowey** guarda la partida... 💾 *Savefile guardado!*")
+            else:
+                # Segundo uso: restaurar estado
+                snap = attacker.get("save_snapshot", {})
+                if snap:
+                    attacker["hp"]      = snap["hp"]
+                    attacker["atk"]     = snap["atk"]
+                    attacker["defense"] = snap["defense"]
+                    attacker["energy"]  = snap["energy"]
+                    atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+                    def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+                    for i, fig in enumerate(atk_team):
+                        if i < len(snap["team_hps_atk"]):
+                            fig["hp"] = max(0, snap["team_hps_atk"][i])
+                    for i, fig in enumerate(def_team):
+                        if i < len(snap["team_hps_def"]):
+                            fig["hp"] = max(0, snap["team_hps_def"][i])
+                    attacker["save_reload_uses"] = 0
+                    attacker.pop("save_snapshot", None)
+                    battle.log.append(f"🌼 **Flowey** regresa el tiempo... ⏪ *Estado restaurado!*")
+                else:
+                    battle.log.append(f"🌼 **Flowey** no tiene nada guardado...")
+
+        elif stype == "flowey_fake_help":
+            uses = attacker.get("fake_help_uses", 0) + 1
+            attacker["fake_help_uses"] = uses
+            if uses <= 2:
+                # "Curación" al oponente
+                defender["hp"] = min(defender["max_hp"], defender["hp"] + 5)
+                battle.log.append(f"🌼 **Flowey**: ¡Hola amigo! Toma estas balitas de amistad~")
+                battle.log.append(f"   💚 {defender['name']} +5 HP... ¿de verdad confías en él?")
+            else:
+                # Tercer uso: DAÑO REAL
+                dmg_fh = skill.get("power", 40)
+                defender["hp"] = max(0, defender["hp"] - dmg_fh)
+                attacker["fake_help_uses"] = 0
+                battle.log.append(f"🌼 **Flowey**: Jajaja, ¿de verdad pensaste que te iba a ayudar?")
+                battle.log.append(f"   ☠️ ¡{dmg_fh} de daño real!")
+
+        elif stype == "flowey_soul":
+            uses = attacker.get("soul_uses", 0) + 1
+            attacker["soul_uses"] = uses
+            hp_gain = skill.get("hp_per_soul", 10)
+            if uses <= 6:
+                attacker["max_hp"] += hp_gain
+                attacker["hp"]     += hp_gain
+                battle.log.append(f"🌼 **Flowey** roba un alma... ({uses}/7)")
+                battle.log.append(f"   ❤️ +{hp_gain} HP permanente! HP: {attacker['hp']}/{attacker['max_hp']}")
+            else:
+                # 7mo uso: desbloquear pasiva OMEGA
+                attacker["omega_unlocked"] = True
+                battle.log.append(f"🌼 **Flowey** ha recolectado 7 almas...")
+                battle.log.append(f"   🌸 **PASIVA OMEGA DESBLOQUEADA.** Si muere ahora... evolucionará.")
+
+        elif stype == "omega_its_the_end":
+            splash = skill.get("power", 110)
+            # Matar activo enemigo
+            defender["hp"] = 0
+            battle.log.append(f"🌸 **OMEGA FLOWEY**: ¡JAJAJAJA! ¡TERMINARE CON TODOS USTEDES!")
+            # 110 a los otros 2 enemigos
+            def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+            for fig in def_team:
+                if fig is not defender and fig["hp"] > 0:
+                    fig["hp"] = max(0, fig["hp"] - splash)
+                    battle.log.append(f"   ☠️ {fig['emoji']} {fig['name']} -{splash} HP!")
+            # 110 a aliados y Flowey muere
+            atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+            for fig in atk_team:
+                if fig is not attacker and fig["hp"] > 0:
+                    fig["hp"] = max(0, fig["hp"] - splash)
+                    battle.log.append(f"   💥 {fig['emoji']} {fig['name']} -{splash} HP (daño propio)!")
+            attacker["hp"] = 0
+            battle.log.append(f"   💀 **OMEGA FLOWEY** cayó en su propia explosión...")
+
 
     if defender["hp"] <= 0:
         # Pasiva de Gamer64: revive una vez con 80% HP
@@ -3032,6 +3213,23 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             defender["energy"] = 0
             battle.log.append(f"💫 **{defender['emoji']} {defender['name']}** se cansó de rodeos, ¡se arranca el brazo y entra a su **Fase 2**!")
             battle.log.append(f"   Se levanta con **{revive_hp} HP** (80% de su vida máxima)!")
+
+        # Pasiva OMEGA de Flowey: evoluciona a Omega Flowey si desbloqueó la pasiva
+        elif defender.get("key") == "flowey" and defender.get("omega_unlocked"):
+            def_team     = battle.p2_team if battle.turn == 1 else battle.p1_team
+            def_idx_attr = "p2_active"    if battle.turn == 1 else "p1_active"
+            idx = getattr(battle, def_idx_attr)
+            # Transformar en Omega Flowey
+            omega = make_fighter("omega_flowey", {"level": defender.get("level", 1), "xp": 0, "stat_ups": {}})
+            def_team[idx] = omega
+            battle.log.append(f"🌼 **Flowey** cae... pero las 7 almas reaccionan...")
+            battle.log.append(f"   🌸 ¡¡**OMEGA FLOWEY** ha despertado!!")
+            # Logro Kirby si fue absorbido por Kirby
+            if defender.get("absorbed_by_kirby"):
+                battle._kirby_absorbed_omega = True
+            battle.turn = 2 if battle.turn == 1 else 1
+            await finish_turn(interaction, battle, channel_id)
+            return
             battle.turn = 2 if battle.turn == 1 else 1
             await finish_turn(interaction, battle, channel_id)
             return
@@ -4686,6 +4884,96 @@ FIGURE_SKILLS["sans"] = [
         "power": 0,
         "dmg_per_kill": 20,
         "desc": "Sans mira todos tus pecados... El daño es igual al número de figuras matadas por el oponente ×20.",
+    },
+]
+
+# ── PAPYRUS ──────────────────────────────────────────────────────
+FIGURE_SKILLS["papyrus"] = [
+    {
+        "name": "Cool Pose!",
+        "cost": 30,
+        "type": "papyrus_pose",
+        "power": 0,
+        "atk_buff": 10,
+        "def_buff": 10,
+        "desc": "Papyrus hace una pose muy genial! +10 ATK y +10 DEF permanentes.",
+    },
+    {
+        "name": "Spaghetti!",
+        "cost": 60,
+        "type": "damage",
+        "power": 20,
+        "stun": True,
+        "stun_turns": 1,
+        "def_debuff": 5,
+        "desc": "Papyrus ofrece un plato de Spaghetti. 20 de daño, stun 1 turno y -5 DEF permanente al oponente.",
+    },
+    {
+        "name": "Cool Laugh!",
+        "cost": 100,
+        "type": "papyrus_laugh",
+        "power": 0,
+        "self_heal": 35,
+        "ally_heal": 20,
+        "desc": "Papyrus motiva a todos. Cura 35 HP a sí mismo y 20 HP a los aliados.",
+    },
+]
+
+# ── FLOWEY ───────────────────────────────────────────────────────
+FIGURE_SKILLS["flowey"] = [
+    {
+        "name": "Save And Reload",
+        "cost": 30,
+        "type": "flowey_save_reload",
+        "power": 0,
+        "desc": "1er uso: Flowey guarda el estado de la batalla. 2do uso: regresa al estado guardado.",
+    },
+    {
+        "name": "Fake Help",
+        "cost": 60,
+        "type": "flowey_fake_help",
+        "power": 40,
+        "desc": "Los 2 primeros usos curan +5 HP al oponente. El 3er uso hace 40 de daño.",
+    },
+    {
+        "name": "One more soul...",
+        "cost": 100,
+        "type": "flowey_soul",
+        "power": 0,
+        "hp_per_soul": 10,
+        "souls_to_omega": 7,
+        "desc": "Los primeros 6 usos dan +10 HP permanente a Flowey. Al 7mo, desbloquea la pasiva OMEGA.",
+    },
+]
+
+# ── OMEGA FLOWEY ─────────────────────────────────────────────────
+FIGURE_SKILLS["omega_flowey"] = [
+    {
+        "name": "MANIATIC LAUGH",
+        "cost": 30,
+        "type": "papyrus_laugh",   # reutiliza heal_team con distintos valores
+        "power": 0,
+        "self_heal": 20,
+        "ally_heal": 10,
+        "desc": '"ESTE ES MI MUNDO AHORA... JAJAJAJAAA!" Cura 20 HP a Flowey y 10 a los aliados.',
+    },
+    {
+        "name": "BOMBS, FIRE AND ROOTS!",
+        "cost": 60,
+        "type": "damage",
+        "power": 45,
+        "aoe": True,
+        "aoe_secondary_power": 10,
+        "stun": True,
+        "stun_turns": 1,
+        "desc": '"ESTO ES UNA PESADILLA!" 45 de daño al activo, 10 a los otros 2 y stun 1 turno.',
+    },
+    {
+        "name": "ITS THE END FOR YOU!",
+        "cost": 100,
+        "type": "omega_its_the_end",
+        "power": 110,
+        "desc": '"JAJAJAJA!" Mata al activo enemigo, 110 a los otros 2 enemigos. Flowey muere y 110 a sus propios aliados.',
     },
 ]
 
@@ -9206,6 +9494,9 @@ ACHIEVEMENTS = {
     "daily_streak_7":   {"name":"📅 Racha de 7 días",          "desc":"Mantén una racha diaria de 7 días seguidos.",      "secret":False},
     "coins_10000":      {"name":"💰 Rico Rico",                 "desc":"Acumula 10,000 monedas a la vez.",                 "secret":False},
     "fig_max_level":    {"name":"⬆️ Al Límite",                "desc":"Sube una figura al nivel máximo (30).",            "secret":False},
+    # Logros de Kirby
+    "kirby_no_mas":         {"name":"🚫 NO MAS KIRBY!",            "desc":"... Nunca debiste intentar absorber eso...",       "secret":True},
+    "kirby_no_entendiste":  {"name":"🚫 NO ME ENTENDISTE!!?? NO MAS!!","desc":"NO... SOLO.... NO!!",                         "secret":True},
 }
 
 def grant_achievement(user_data: dict, achievement_id: str) -> bool:
