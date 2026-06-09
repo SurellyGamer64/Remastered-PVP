@@ -2,22 +2,22 @@
   "users": {
     "1236293193893412975": {
       "name": "Gamer64",
-      "coins": 99700202,
+      "coins": 99700302,
       "figures": [
         {
           "key": "og_gamer64",
           "level": 1,
-          "xp": 32
+          "xp": 48
         },
         {
           "key": "og_gamer64",
           "level": 1,
-          "xp": 32
+          "xp": 48
         },
         {
           "key": "og_gamer64",
           "level": 1,
-          "xp": 32
+          "xp": 48
         },
         {
           "key": "sans",
@@ -27,12 +27,27 @@
         {
           "key": "boss_paper1",
           "level": 1,
-          "xp": 16
+          "xp": 32
         },
         {
           "key": "boss_impostor_green",
           "level": 1,
-          "xp": 16
+          "xp": 32
+        },
+        {
+          "key": "sans",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "sans",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "santa_vaca",
+          "level": 1,
+          "xp": 0
         }
       ],
       "team": [
@@ -40,12 +55,12 @@
         4,
         5
       ],
-      "wins": 2,
+      "wins": 3,
       "losses": 0,
       "level": 2,
-      "xp": 0,
+      "xp": 50,
       "ingredients": {
-        "🐮": 1,
+        "🐮": 2,
         "🥚": -1
       },
       "recipe_count": 1,
@@ -75,26 +90,38 @@
     },
     "1384663451648921610": {
       "name": "Klin",
-      "coins": 14551,
+      "coins": 13951,
       "figures": [
         {
           "key": "guest1337",
           "level": 1,
           "xp": 0
+        },
+        {
+          "key": "janedoe",
+          "level": 1,
+          "xp": 32
         }
       ],
       "team": [
-        0,
-        0,
-        0
+        1,
+        1,
+        1
       ],
-      "wins": 0,
+      "wins": 2,
       "losses": 0,
-      "level": 1,
+      "level": 2,
       "xp": 0,
       "ingredients": {
         "🍫": 1
-      }
+      },
+      "achievements": [
+        "first_figure",
+        "first_win",
+        "coins_10000",
+        "first_level"
+      ],
+      "skill_points": 1
     }
   }
 }

@@ -219,6 +219,41 @@ FIGURES = {
         "speed": 35,
         "image": "https://static.wikia.nocookie.net/the-ultimate-evil/images/b/bc/Black_Impostor_FINALE_V4.png/revision/latest/scale-to-width/360?cb=20230309224128",
     },
+    "homero": {
+        "name": "Homero Simpson",
+        "emoji": "🍩",
+        "rarity": "mítico",
+        "price": 2024,
+        "hp": 100,
+        "attack": 18,
+        "defense": 10,
+        "speed": 7,
+        "image": "https://media.gq.com.mx/photos/5be9eeb284b96e68a794165c/master/pass/11_cosas_que_le_preguntariamos_a_homero_simpson_2494.jpg",
+    },
+    "jevil": {
+        "name": "Jevil",
+        "emoji": "🃏",
+        "rarity": "mítico",
+        "price": 2018,
+        "hp": random.randint(270, 290),
+        "attack": random.randint(21, 24),
+        "defense": random.randint(20, 26),
+        "speed": 30,
+        "image": "https://images.steamusercontent.com/ugc/15345781204781413326/7D2F8F47C62958FAFD73E4B8528D601AE3D018E9/?imw=637&imh=358&ima=fit&impolicy=Letterbox&imcolor=%23000000&letterbox=true",
+        "passive": "true_god_of_chaos",
+    },
+    "annoying_dog": {
+        "name": "Annoying Dog",
+        "emoji": "🐶",
+        "rarity": "mítico",
+        "price": 1991,
+        "hp": 290,
+        "attack": random.randint(20, 25),
+        "defense": random.randint(10, 20),
+        "speed": random.randint(21, 32),
+        "image": "https://i.scdn.co/image/ab6761610000e5ebcce32307d0f312e8faf01bae",
+        "secret_misfiguras": True,
+    },
     "santa_vaca": {
         "name": "SANTA VACA!",
         "emoji": "🐮",
@@ -434,6 +469,28 @@ FIGURES = {
         "phases": 4,
         "image": "https://i.postimg.cc/y8zY3Hyg/Normal.png",
         "passive": "og_gamer_phases",
+    },
+    "og_light": {
+        "name": "ＯＧ　ＬＩＧＨＴ",
+        "emoji": "🧊",
+        "rarity": "Mítico",
+        "price": 0,
+        "hp": 230,
+        "attack": 28,
+        "defense": 42,
+        "speed": 32,
+        "image": "https://i.postimg.cc/25YF7rM7/Parpadeo-L.gif",
+    },
+    "og_fire": {
+        "name": "ＯＧ　ＦＩＲＥ",
+        "emoji": "🔥",
+        "rarity": "Mítico",
+        "price": 0,
+        "hp": 228,
+        "attack": 30,
+        "defense": 35,
+        "speed": 34,
+        "image": "https://i.postimg.cc/d09X8WHL/Fire.png",
     },
     "holy_cow": {
         "name": "Holy Cow",
@@ -751,6 +808,116 @@ FIGURE_SKILLS = {
             "power": 0,
             "splash_dmg": 40,
             "desc": "...Ya estoy harto de ustedes... Es hora de acabar esto... Mata a la figura activa enemiga, +40 de daño a las otras 2. Black muere directamente.",
+        },
+    ],
+    "homero": [
+        {
+            "name": "Random Food",
+            "cost": 30,
+            "type": "random_food",
+            "desc": (
+                "Homero saca algo de su bolsillo y se lo come! Que hambre...\n"
+                "🍩 Donut: Cura 20 HP. 🍺 Cerveza Duff: Cura 30 HP a Homero y 10 a aliados.\n"
+                "🌶️ Chiles: 10 de daño a Homero, 5 a todos los rivales + burning + stun 1t.\n"
+                "🦐 Mariscos: Cura 20 HP y +20 energía. 🍔 Krusty Burger: Cura 20 HP, -10 DEF por 2t.\n"
+                "🥖 Submarino: Cura 100 HP y +40 HP máx, pero stunea 3 turnos.\n"
+                "🍫 Barra de Comida: Cura entre 15 y 45 HP al azar."
+            ),
+            "foods": [
+                {"key": "donut",    "label": "🍩 Donut",              "effect": "self_heal",    "power": 20},
+                {"key": "duff",     "label": "🍺 Cerveza Duff",       "effect": "duff_heal",    "self_heal": 30, "ally_heal": 10},
+                {"key": "chiles",   "label": "🌶️ Chiles Picantes",    "effect": "chiles",       "self_dmg": 10, "enemy_dmg": 5, "dot_power": 4, "dot_turns": 3, "stun_turns": 1},
+                {"key": "mariscos", "label": "🦐 Mariscos",           "effect": "mariscos",     "self_heal": 20, "energy_bonus": 20},
+                {"key": "burger",   "label": "🍔 Krusty Burger",      "effect": "krusty_burger","self_heal": 20, "def_nerf": 10, "nerf_turns": 2},
+                {"key": "sub",      "label": "🥖 El Sandwich Submarino","effect": "submarine",  "self_heal": 100, "hp_bonus": 40, "stun_turns": 3},
+                {"key": "bar",      "label": "🍫 Barra de Comida",    "effect": "random_heal",  "min": 15, "max": 45},
+            ],
+        },
+        {
+            "name": "Why, you little...!",
+            "cost": 60,
+            "type": "homer_choke",
+            "power": 25,
+            "dot_turns": 5,
+            "self_block_turns": 5,
+            "enemy_stun_turns": 5,
+            "escape_minigame": True,
+            "desc": (
+                "Homero ahorca a la figura rival! 25 de daño por turno durante 5 turnos.\n"
+                "Homero queda bloqueado y el rival stuneado por 5 turnos.\n"
+                "El rival puede completar un minijuego para liberarse y stunear a Homero 2 turnos."
+            ),
+        },
+        {
+            "name": "Nuclear Missfunction",
+            "cost": 100,
+            "type": "nuclear_missfunction",
+            "desc": (
+                "Puede que haya presionado el botón incorrecto... D'OH!\n"
+                "50%: Mata 2 figuras rivales y hace 100 de daño a la restante. ¡Woo-hoo!\n"
+                "50%: Lo contrario... We tried our best and we failed miserably."
+            ),
+        },
+    ],
+    "jevil": [
+        {
+            "name": "CHAOS CHAOS",
+            "cost": 30,
+            "type": "chaos_chaos",
+            "desc": (
+                "THE CHAOS IS THE ONLY THING I'M HERE FOR!\n"
+                "Aplica un efecto al azar al oponente: frozen, burning, stun 2t, "
+                "forzar cambio, poisoning, o dizziness (-daño 3t)."
+            ),
+        },
+        {
+            "name": "THE MAP REVOLVING",
+            "cost": 60,
+            "type": "map_revolving",
+            "dizziness_turns": 6,
+            "stun_chance": 0.50,
+            "desc": (
+                "El mapa empieza a girar... ¡alguien tiene que pararlo!\n"
+                "Aplica dizziness 6 turnos al oponente. Cada turno hay un 50% de que también lo stunee."
+            ),
+        },
+        {
+            "name": "METAMORPHOSIS!",
+            "cost": 100,
+            "type": "metamorphosis",
+            "duration": 6,
+            "desc": (
+                "Jevil fuerza el cambio de figuras tanto de aliados como de oponentes!\n"
+                "Cada turno, ocurre un cambio forzado de figura tras la jugada. Dura 6 turnos."
+            ),
+        },
+    ],
+    "annoying_dog": [
+        {
+            "name": "Code Consumer",
+            "cost": 30,
+            "type": "code_consumer",
+            "desc": (
+                "Toby se comió parte del código... OH NO!\n"
+                "Obtiene un buff o debuff al azar y lo aplica también al enemigo."
+            ),
+        },
+        {
+            "name": "BARK!",
+            "cost": 60,
+            "type": "bark",
+            "power": 15,
+            "desc": "... ¿y eso qué hace?\n15 de daño al oponente + cualquier debuff al azar.",
+        },
+        {
+            "name": "Strange Twirl",
+            "cost": 100,
+            "type": "strange_twirl",
+            "desc": (
+                "Este es solo el comienzo de algo más grande...\n"
+                "Reemplaza a Toby y a la figura activa del oponente con figuras al azar del juego "
+                "hasta el final de la batalla."
+            ),
         },
     ],
     "santa_vaca": [
@@ -1171,6 +1338,14 @@ def make_fighter(fig_key, owner_fig_data, hp_mult=1.0, atk_mult=1.0, energy_bonu
         fighter["sans_sleeping"]     = False
         fighter["sans_woken"]        = False
 
+    # Pasiva de Jevil: TRUE GOD OF CHAOS — 25% por turno de buff/debuff random a todos
+    if fig_key == "jevil":
+        fighter["chaos_passive_active"] = True
+
+    # Annoying Dog: stats ocultas en /misfiguras (se muestran en batalla)
+    if fig_key == "annoying_dog":
+        fighter["secret_stats"] = True
+
     return fighter
 
 class BattleState:
@@ -1226,8 +1401,11 @@ class BattleState:
                 bar += "⬛"
         return bar + f" {energy}/100"
 
-    def calc_damage(self, atk, defense, power):
-        raw = int(atk * (power / 100)) + random.randint(-3, 8)
+    def calc_damage(self, atk, defense, power, attacker_fig=None):
+        eff_atk = atk
+        if attacker_fig and attacker_fig.get("dizziness_turns", 0) > 0:
+            eff_atk = int(eff_atk * 0.70)  # dizziness: -30% daño
+        raw = int(eff_atk * (power / 100)) + random.randint(-3, 8)
         return max(1, raw - (defense // 4))
 
     def alive_team(self, team):
@@ -1406,6 +1584,46 @@ def get_battle_view(battle: BattleState):
         sw_btn.callback = make_switch_callback(battle, switchable, cur_team)
         view.add_item(sw_btn)
 
+    # Botón de escape del ahorcamiento de Homero
+    cur_fig = cur_team[cur_idx]
+    if cur_fig.get("homer_choking") and cur_fig.get("stun_turns", 0) > 0:
+        # Muestra botón de minijuego solo al jugador que está siendo ahorcado
+        minigame_btn = discord.ui.Button(
+            label="🎮 ¡ESCAPA DEL AHORCAMIENTO! (Presiona rápido)",
+            style=discord.ButtonStyle.danger,
+            custom_id="homer_escape",
+            row=3,
+        )
+        async def homer_escape_cb(inter: discord.Interaction):
+            if inter.user.id not in (battle.p1, battle.p2):
+                await inter.response.send_message("❌ No eres parte de esta batalla.", ephemeral=True)
+                return
+            # Determina quién está siendo ahorcado
+            choking_team = battle.p1_team if battle.turn == 2 else battle.p2_team
+            choking_idx  = battle.p1_active if battle.turn == 2 else battle.p2_active
+            choked_fig   = choking_team[choking_idx]
+            # Encuentra a Homero (el ahorcador)
+            homer_team   = battle.p2_team if battle.turn == 2 else battle.p1_team
+            homer_idx    = battle.p2_active if battle.turn == 2 else battle.p1_active
+            homer_fig    = homer_team[homer_idx]
+            # Minijuego: probabilidad 65% de escapar (simplificado como botón de timing)
+            success = random.random() < 0.65
+            if success:
+                # Libera al ahorcado, stunea a Homero
+                choked_fig["homer_choking"]  = False
+                choked_fig["stun_turns"]     = 0
+                # Limpiar el DOT del ahorcamiento
+                choked_fig["dots"] = [d for d in choked_fig.get("dots", [])
+                                       if d.get("dmg") != 25]
+                homer_fig["stun_turns"] = max(homer_fig.get("stun_turns", 0), 2)
+                battle.log = [f"🎮 **¡MINIJUEGO COMPLETADO!** {choked_fig['name']} se libera del ahorcamiento!",
+                               f"   😤 Homero queda stuneado 2 turnos de la sorpresa!"]
+            else:
+                battle.log = [f"🎮 **¡MINIJUEGO FALLIDO!** {choked_fig['name']} no logró liberarse..."]
+            await inter.response.edit_message(embed=battle.get_embed(), view=get_battle_view(battle))
+        minigame_btn.callback = homer_escape_cb
+        view.add_item(minigame_btn)
+
     # Botón especial Switch Swords si Shedletsky está activo
     if f.get("key") == "chicken":
         swords = ["linked","firebrand","venomshank","windforce","darkheart","illumina","ghostwalker","ice_dagger"]
@@ -1559,8 +1777,112 @@ def make_skill_callback(skill_idx, battle: BattleState):
             await interaction.response.send_message("❌ No es tu turno.", ephemeral=True)
             return
 
+        # ── Pasiva TIMING de Paper Mario ──────────────────────────────────
+        # Si el atacante tiene passive2="timing" y va a usar un ataque de daño
+        # mostrar el minijuego de timing ANTES de ejecutar la acción
+        attacker_check = battle.current_p1() if battle.turn == 1 else battle.current_p2()
+        is_damage_action = False
+        if skill_idx == -2:
+            is_damage_action = True  # ataque básico
+        elif skill_idx >= 0 and skill_idx < len(attacker_check.get("skills", [])):
+            sk = attacker_check["skills"][skill_idx]
+            if sk.get("type") in ("damage", "slash", "fast_kill", "consumed_fury",
+                                  "glitch_dmg", "holy_nuke", "lobster"):
+                is_damage_action = True
+
+        if (attacker_check.get("passive2") == "timing"
+                and is_damage_action
+                and not attacker_check.get("timing_used_this_turn")):
+            await show_timing_minigame(interaction, battle, skill_idx, channel_id)
+            return
+        # ──────────────────────────────────────────────────────────────────
+
         await execute_action(interaction, battle, skill_idx, channel_id)
     return callback
+
+async def show_timing_minigame(interaction, battle: BattleState, skill_idx: int, channel_id: int):
+    """Minijuego de timing para Paper Mario.
+    Muestra 3 botones — solo uno tiene el timing correcto.
+    El jugador tiene 2 segundos para presionarlo."""
+    import asyncio
+
+    attacker = battle.current_p1() if battle.turn == 1 else battle.current_p2()
+    attacker["timing_used_this_turn"] = True  # evitar loops
+
+    # Elegir posición correcta aleatoriamente (0, 1 o 2)
+    correct_pos = random.randint(0, 2)
+    labels = ["⬅️ ¡Ahora!", "⬆️ ¡Ahora!", "➡️ ¡Ahora!"]
+    dummy_labels = ["⬅️ ...", "⬆️ ...", "➡️ ..."]
+
+    timing_result = {"success": False, "answered": False}
+
+
+    embed = discord.Embed(
+        title="⭐ ¡TIMING! — Pasiva de Paper Mario",
+        description=(
+            f"**{attacker['emoji']} {attacker['name']}** prepara su ataque...\n\n"
+            f"Presiona el botón **¡Ahora!** correcto para conseguir **+20 ATK** en este golpe!\n"
+            f"⏰ Tienes **2 segundos**!"
+        ),
+        color=0xf1c40f
+    )
+    view = discord.ui.View(timeout=2)
+
+    async def make_timing_btn(pos: int):
+        is_correct = (pos == correct_pos)
+        label = labels[pos] if is_correct else dummy_labels[pos]
+        btn = discord.ui.Button(
+            label=label,
+            style=discord.ButtonStyle.success if is_correct else discord.ButtonStyle.secondary,
+            custom_id=f"timing_{pos}",
+            row=0
+        )
+        async def timing_cb(inter: discord.Interaction):
+            if inter.user.id != interaction.user.id:
+                await inter.response.send_message("❌ No es tu minijuego.", ephemeral=True)
+                return
+            timing_result["answered"] = True
+            if is_correct:
+                timing_result["success"] = True
+                attacker["atk_buff"] = attacker.get("atk_buff", 0) + 20
+                result_embed = discord.Embed(
+                    title="⭐ ¡TIMING PERFECTO!",
+                    description=f"**+20 ATK** para este ataque! ¡Brillante!",
+                    color=0x2ecc71
+                )
+            else:
+                result_embed = discord.Embed(
+                    title="❌ ¡Timing fallido!",
+                    description="No era ese botón... el ataque sale normal.",
+                    color=0xe74c3c
+                )
+            await inter.response.edit_message(embed=result_embed, view=None)
+            await asyncio.sleep(0.8)
+            await execute_action(inter, battle, skill_idx, channel_id)
+        btn.callback = timing_cb
+        return btn
+
+    for i in range(3):
+        view.add_item(await make_timing_btn(i))
+
+    async def on_timeout():
+        if not timing_result["answered"]:
+            # Se acabó el tiempo → ataque normal sin buff
+            try:
+                timeout_embed = discord.Embed(
+                    title="⏰ ¡Tiempo agotado!",
+                    description="El timing falló... el ataque sale sin buff.",
+                    color=0x95a5a6
+                )
+                await interaction.edit_original_response(embed=timeout_embed, view=None)
+                await asyncio.sleep(0.5)
+                await execute_action(interaction, battle, skill_idx, channel_id)
+            except Exception:
+                pass
+
+    view.on_timeout = on_timeout
+
+    await interaction.response.edit_message(embed=embed, view=view)
 
 async def execute_action(interaction, battle: BattleState, skill_idx: int, channel_id: int):
     """Ejecuta la acción del jugador activo."""
@@ -1572,7 +1894,95 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
     # Reducir contadores de bloqueo
     battle.tick_locks()
 
+    # Limpiar flag de timing de Paper Mario
+    attacker = battle.current_p1() if battle.turn == 1 else battle.current_p2()
+    attacker.pop("timing_used_this_turn", None)
+    # Re-asignar attacker después del pop
+    attacker = battle.current_p1() if battle.turn == 1 else battle.current_p2()
+
     # ── TICK: Efectos especiales de los Impostores FNF ────────────────────────
+
+    # ── DRONES.V4 (OG Light): procesar daño y explosiones cada turno ───────────
+    for fig in battle.p1_team + battle.p2_team:
+        if fig.get("drones") and fig["hp"] > 0:
+            drones = fig["drones"]
+            if drones["turns"] > 0:
+                # Aplicar daño al oponente activo
+                opp_team = battle.p2_team if fig in battle.p1_team else battle.p1_team
+                opp_active_idx = getattr(battle, "p2_active" if fig in battle.p1_team else "p1_active")
+                target = opp_team[opp_active_idx] if opp_active_idx < len(opp_team) else None
+                if target and target["hp"] > 0:
+                    exploded = False
+                    total_dmg = 0
+                    active_drones = drones["count"]
+                    for d in range(active_drones):
+                        if random.randint(1, 100) <= drones["explode_chance"]:
+                            # ¡Explosión!
+                            explode_dmg = drones["explode_dmg"]
+                            target["hp"] = max(0, target["hp"] - explode_dmg)
+                            target.setdefault("dots", []).append({"dmg": 6, "turns": drones["explode_dot"]})
+                            battle.log.append(f"💥 ¡Un drone de **ＯＧ　ＬＩＧＨＴ** explota! {explode_dmg} daño + burning!")
+                            battle.log.append(f'   🧊 "Eh... Eso no debía pasar... Lo siento!"')
+                            drones["count"] = max(0, drones["count"] - 1)
+                            exploded = True
+                            break
+                    if not exploded:
+                        dmg_per_drone = random.randint(drones["dmg_min"], drones["dmg_max"])
+                        total_dmg = dmg_per_drone * drones["count"]
+                        target["hp"] = max(0, target["hp"] - total_dmg)
+                        battle.log.append(f"🤖 Los drones de **ＯＧ　ＬＩＧＨＴ** atacan: -{total_dmg} HP ({drones['count']} activos)")
+                drones["turns"] -= 1
+                if drones["turns"] <= 0 or drones["count"] <= 0:
+                    fig.pop("drones", None)
+                    battle.log.append(f"🤖 Los drones de **ＯＧ　ＬＩＧＨＴ** se apagan.")
+
+    # ── RECHAZO ETERNO (El Muñeco): buff a baja vida + regeneración cada 20 turnos ──
+    if not hasattr(battle, "muneco_turn_counter"):
+        battle.muneco_turn_counter = 0
+    battle.muneco_turn_counter += 1
+    for fig in battle.p1_team + battle.p2_team:
+        if fig.get("key") == "el_muneco" and fig["hp"] > 0:
+            max_hp = fig.get("max_hp", 1000)
+            # Buff a baja vida (< 30%)
+            if fig["hp"] < max_hp * 0.30 and not fig.get("rechazo_eterno_buff"):
+                fig["rechazo_eterno_buff"] = True
+                fig["atk"] = fig.get("atk", 92) + 30
+                fig["defense"] = fig.get("defense", 98) + 30
+                battle.log.append(f"🗣️ **EL MUÑECO** activa **Rechazo Eterno**... +30 ATK +30 DEF!")
+            # Regeneración cada 20 turnos
+            if battle.muneco_turn_counter % 20 == 0:
+                fig["hp"] = max_hp
+                battle.log.append(f"🗣️ ¡**EL MUÑECO** se cura completamente! ({20} turnos cumplidos)")
+                battle.log.append(f"   ⚠️ Contador reiniciado. Siguiente curación en **20 turnos**.")
+
+    # ── KIDNAP DoT (El Espectro) ────────────────────────────────────────────
+    for fig in battle.p1_team + battle.p2_team:
+        if fig.get("kidnapped") and fig["hp"] > 0:
+            kdmg = fig.get("kidnap_dmg", 15)
+            fig["hp"] = max(0, fig["hp"] - kdmg)
+            battle.log.append(f"👋 **{fig['emoji']} {fig['name']}** sigue secuestrado... -{kdmg} HP!")
+            # Minijuego de escape: ofrecer botón al jugador
+            uid = battle.p1 if fig in battle.p1_team else battle.p2
+            if uid != 0:
+                view_esc = discord.ui.View(timeout=8)
+                esc_btn = discord.ui.Button(label="🏃 ¡ESCAPAR! (50%)", style=discord.ButtonStyle.danger)
+                async def kidnap_esc_cb(ei: discord.Interaction, f=fig):
+                    if ei.user.id != uid:
+                        await ei.response.send_message("❌ No es tu turno.", ephemeral=True)
+                        return
+                    if random.randint(1,100) <= 50:
+                        f.pop("kidnapped", None)
+                        f.pop("kidnap_dmg", None)
+                        battle.log.append(f"💨 **{f['emoji']} {f['name']}** logra escapar del secuestro!")
+                    else:
+                        battle.log.append(f"😫 **{f['emoji']}** no logra escapar...")
+                    await finish_turn(ei, battle, channel_id)
+                esc_btn.callback = kidnap_esc_cb
+                view_esc.add_item(esc_btn)
+                try:
+                    await interaction.followup.send("⚡ ¡Intenta escapar del secuestro!", view=view_esc, ephemeral=True)
+                except Exception:
+                    pass
 
     # Ejected queue — cuenta atrás para el retorno de Green/Maroon
     if hasattr(battle, "ejected_queue") and battle.ejected_queue:
@@ -1592,12 +2002,19 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                         orig_fig  = FIGURES[sf]
                         new_entry = make_fighter(sf, {"level":1,"xp":0,"stat_ups":{}})
                         team[idx] = new_entry
-                        # Reactivar esa figura si el equipo no tiene activo
+                        # Reactivar esa figura — buscar cualquier slot libre
                         idx_attr = "p1_active" if eq["attacker_team"] == "p1" else "p2_active"
-                        if team[getattr(battle, idx_attr)]["hp"] <= 0:
-                            setattr(battle, idx_attr, idx)
-                        battle.log.append(f"🚀 **{orig_fig['name']}** VUELVE... ¡y está TRANSFORMADO!")
-                # Si no quedan vivos, no vuelve (ya ganaste)
+                        cur_active = getattr(battle, idx_attr)
+                        if cur_active >= len(team) or team[cur_active]["hp"] <= 0:
+                            for i, f in enumerate(team):
+                                if f["hp"] > 0:
+                                    setattr(battle, idx_attr, i)
+                                    break
+                        battle.log.append(f"🚀 ¡**{orig_fig['name']}** VUELVE del espacio... y está TRANSFORMADO!")
+                    # NO añadir a still_pending — ya procesado
+                else:
+                    battle.log.append(f"💫 Los expulsados no vuelven — la batalla ya terminó.")
+                # En ambos casos, no se re-añade a still_pending (se descarta)
             else:
                 still_pending.append(eq)
                 if eq["turns_left"] <= 5:
@@ -1695,6 +2112,14 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             else:
                 await end_battle(interaction, battle, channel_id, winner_turn=2 if battle.turn==1 else 1)
                 return
+
+    # Dizziness countdown y stun probabilístico (Map Revolving de Jevil)
+    if attacker.get("dizziness_turns", 0) > 0:
+        attacker["dizziness_turns"] -= 1
+        stun_c = attacker.get("dizziness_stun_chance", 0)
+        if stun_c > 0 and random.random() < stun_c:
+            attacker["stun_turns"] = max(attacker.get("stun_turns", 0), 1)
+            battle.log.append(f"💫 **{attacker['name']}** está tan mareado que pierde el turno!")
 
     # Verificar si está aturdido (con soporte de stun_turns)
     if attacker.get("stun_turns", 0) > 0:
@@ -3057,6 +3482,239 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 battle.log.append(f"   {' · '.join(hit)}")
             battle.log.append(f"   ☠️ Burning {dot_dmg}/turno por {dot_t} turnos!")
 
+        # ── EL MUÑECO / EL ESPECTRO / BLACK IMPOSTOR DEFEAT ─────────
+
+        elif stype == "ultra_attack":
+            charges = attacker.get("ultra_attack_charges", 0) + 1
+            attacker["ultra_attack_charges"] = charges
+            needed = skill.get("charge_turns", 2)
+            if charges < needed:
+                attacker["ultra_attack_buffed"] = True
+                battle.log.append(f"🗣️ **{attacker['name']}** se potencia... ({charges}/{needed}) ¡Se acerca algo enorme!")
+            else:
+                attacker["ultra_attack_charges"] = 0
+                base = skill.get("power", 105)
+                dmg = battle.calc_damage(attacker["atk"], defender["defense"], base)
+                defender["hp"] = max(0, defender["hp"] - dmg)
+                battle.log.append(f"🗣️ **{attacker['name']}** lanza su **Ultra Attack**! → **{dmg}** daño!")
+
+        elif stype == "muneco_regen":
+            charges = attacker.get("regen_charges", 0) + 1
+            attacker["regen_charges"] = charges
+            needed = skill.get("charge_turns", 5)
+            if charges < needed:
+                battle.log.append(f"🗣️ **{attacker['name']}** carga su regeneración... ({charges}/{needed})")
+            else:
+                attacker["regen_charges"] = 0
+                full_hp = attacker.get("max_hp", 1000)
+                attacker["hp"] = full_hp
+                battle.log.append(f"🗣️ ¡**{attacker['name']}** se regenera completamente! → {full_hp} HP!")
+
+        elif stype == "kidnapping":
+            dmg_per_turn = skill.get("power", 15)
+            # Elegir oponente random
+            alive = [f for f in def_team if f["hp"] > 0]
+            if alive:
+                victim = random.choice(alive)
+                victim["kidnapped"] = True
+                victim["kidnap_dmg"] = dmg_per_turn
+                victim["kidnap_turns"] = 999  # Hasta que escape
+                battle.log.append(f"🐱\u200d👤 **{attacker['name']}**: _Let me take you to my world..._")
+                battle.log.append(f"   👋 ¡**{victim['emoji']} {victim['name']}** ha sido secuestrado! -{dmg_per_turn} HP/turno")
+                battle.log.append(f"   ⚡ ¡El usuario puede intentar escapar con el minijuego!")
+
+        elif stype == "spectro_vanish":
+            splash = skill.get("power", 30)
+            atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+            alive_allies = [f for f in atk_team if f["hp"] > 0 and f is not attacker]
+            alive_enemies = [f for f in def_team if f["hp"] > 0]
+            # Elegir aliado y enemigo para desaparecer
+            if alive_allies and alive_enemies:
+                partner = random.choice(alive_allies)
+                victim = random.choice(alive_enemies)
+                attacker["hp"] = 0
+                partner["hp"] = 0
+                victim["hp"] = 0
+                # Daño splash a figuras restantes
+                for fig in def_team:
+                    if fig is not victim and fig["hp"] > 0:
+                        fig["hp"] = max(0, fig["hp"] - splash)
+                battle.log.append(f"🐱‍👤 **{attacker['name']}**: _NOW YOURE GETTING INTO MY SHOW!_")
+                battle.log.append(f"   💨 **{attacker['name']}** y **{partner['emoji']} {partner['name']}** desaparecen!")
+                battle.log.append(f"   💨 **{victim['emoji']} {victim['name']}** también desaparece!")
+                battle.log.append(f"   💥 Las figuras restantes reciben {splash} daño!")
+
+        elif stype == "sprint_up":
+            charges = attacker.get("sprint_charges", 0) + 1
+            attacker["sprint_charges"] = charges
+            needed = skill.get("charges_needed", 3)
+            if charges < needed:
+                battle.log.append(f"🔪 **{attacker['name']}**: _IM GOING TO CATCH YOU!_ ({charges}/{needed})")
+            else:
+                attacker["sprint_charges"] = 0
+                dot_dmg = skill.get("power", 20)
+                dot_t   = skill.get("dot_turns", 4)
+                defender.setdefault("dots", []).append({"dmg": dot_dmg, "turns": dot_t})
+                battle.log.append(f"🔪 **{attacker['name']}** ¡ATACA! → {dot_dmg} daño/turno x{dot_t}!")
+
+        elif stype == "right_behind_you":
+            immune_t = skill.get("immune_turns", 3)
+            attacker["immune_turns"] = immune_t
+            attacker["right_behind_shield"] = skill.get("break_damage", 80)
+            attacker["right_behind_stun"] = skill.get("stun_on_break", 2)
+            attacker["right_behind_punish"] = skill.get("power", 50)
+            battle.log.append(f"🔪 **{attacker['name']}**: _Theres no escape..._")
+            battle.log.append(f"   🛡️ Inmune al daño por {immune_t} turnos.")
+            battle.log.append(f"   ⚡ Si le haces {skill.get('break_damage',80)} daño: stun {skill.get('stun_on_break',2)}T. Si no: {skill.get('power',50)} daño + stun 1T.")
+
+        elif stype == "speed_up_slash":
+            # Verificar si el jugador tiene el frasquito de glitch
+            if attacker.get("speed_slash_warning"):
+                # Ya advirtió el turno anterior — ejecutar instakill
+                attacker.pop("speed_slash_warning", None)
+                uid = battle.p1 if battle.turn == 2 else battle.p2
+                # Revisar si el jugador tiene Frasquito de Glitch activo
+                glitch_active = defender.get("glitch_vial_active", False)
+                if glitch_active:
+                    defender.pop("glitch_vial_active", None)
+                    defender["glitch_vial_cooldown"] = 5
+                    battle.log.append(f"🔪 **{attacker['name']}**: _You arent escaping this time..._")
+                    battle.log.append(f"   ✨ ¡**{defender['emoji']}** usó el Frasquito de Glitch! ¡El ataque falla!")
+                else:
+                    battle.log.append(f"🔪 **{attacker['name']}**: _You arent escaping this time..._")
+                    battle.log.append(f"   ⚡💀 **SPEED UP SLASH** — ¡INSTAKILL!")
+                    defender["hp"] = 0
+            else:
+                # Primera vez: advertir
+                attacker["speed_slash_warning"] = True
+                battle.log.append(f"⚠️ **{attacker['name']}** está preparando algo terrible...")
+                battle.log.append(f"   🔪 _¡El próximo turno usará **SPEED UP SLASH**! ¡Prepárate!_")
+                battle.log.append(f"   💊 Si tienes un **Frasquito de Glitch**, úsalo ahora.")
+
+        # ── OG LIGHT ─────────────────────────────────────────────────
+
+        elif stype == "passion_science":
+            heal = skill.get("power", 20)
+            atk_buff = skill.get("atk_buff", 10)
+            atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+            for ally in atk_team:
+                if ally["hp"] > 0:
+                    ally["hp"] = min(ally.get("max_hp", ally["hp"] + heal), ally["hp"] + heal)
+            attacker["atk"] = attacker.get("atk", 28) + atk_buff
+            battle.log.append(f"🧊 **ＯＧ　ＬＩＧＨＴ** trabaja apasionadamente! +{heal} HP al equipo, +{atk_buff} ATK!")
+
+        elif stype == "drones_v4":
+            drone_count = skill.get("drone_count", 4)
+            dmg_min = skill.get("drone_dmg_min", 3)
+            dmg_max = skill.get("drone_dmg_max", 5)
+            turns = skill.get("drone_turns", 5)
+            explode_chance = skill.get("explode_chance", 15)
+            explode_dmg = skill.get("explode_dmg", 30)
+            explode_dot = skill.get("explode_dot_turns", 3)
+            # Inicializar drones en el estado de la figura
+            attacker["drones"] = {
+                "count": drone_count,
+                "dmg_min": dmg_min,
+                "dmg_max": dmg_max,
+                "turns": turns,
+                "explode_chance": explode_chance,
+                "explode_dmg": explode_dmg,
+                "explode_dot": explode_dot,
+            }
+            battle.log.append(f"🧊 **ＯＧ　ＬＩＧＨＴ** despliega {drone_count} drones! Que... espera, ¿eso no debia pasar asi?")
+            battle.log.append(f"   🤖 Los drones harán {dmg_min}-{dmg_max} daño/turno x{turns}. Cada uno: {explode_chance}% de explotar...")
+
+        elif stype == "ice_age":
+            # Verificar si ya está cargando
+            charges = attacker.get("ice_age_charges", 0) + 1
+            attacker["ice_age_charges"] = charges
+            needed = skill.get("charge_turns", 6)
+            messages = {
+                1: "Light no hace nada... que raro...",
+                2: "Light empieza a ser rodeado por hielo...",
+                3: "Parece que Light sigue concentrándose en algo?",
+                4: "... Oh dios no...",
+                5: "ES MUY TARDE!! NO HAY ESCAPE!! EL HIELO CONSUMIRA A TODOS!",
+                6: "Light lanza un ataque de Hielo Superpotente... Te lo adverti!",
+            }
+            if charges < needed:
+                attacker["cant_attack_turns"] = 2  # No puede atacar ni defenderse
+                attacker["ice_age_charging"] = True
+                msg = messages.get(charges, "...")
+                battle.log.append(f"🧊 **ＯＧ　ＬＩＧＨＴ**: _{msg}_ ({charges}/{needed})")
+            else:
+                attacker["ice_age_charges"] = 0
+                attacker.pop("ice_age_charging", None)
+                # Ejecutar el ataque
+                main_dmg = skill.get("power", 150)
+                aoe_dmg = skill.get("aoe_power", 80)
+                frozen_t = skill.get("frozen_turns", 2)
+                def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+                def_active_idx = getattr(battle, "p2_active" if battle.turn == 1 else "p1_active")
+                battle.log.append(f"🧊❄️ **ＯＧ　ＬＩＧＨＴ**: _{messages[6]}_")
+                for i, fig in enumerate(def_team):
+                    if fig["hp"] > 0:
+                        dmg = battle.calc_damage(attacker["atk"], fig["defense"], main_dmg if i == def_active_idx else aoe_dmg)
+                        fig["hp"] = max(0, fig["hp"] - dmg)
+                        fig["stun_turns"] = frozen_t
+                        fig.setdefault("dots", []).append({"dmg": 8, "turns": frozen_t})
+                        battle.log.append(f"   ❄️ {fig['emoji']} {fig['name']}: -{dmg} HP + Frozen {frozen_t}T!")
+
+        # ── OG FIRE ──────────────────────────────────────────────────
+
+        elif stype == "the_trauma":
+            import random as _r
+            debuffs = [
+                ("atk_debuff",   lambda f: f.update({"atk": max(0, f.get("atk",0) - 8)}),   "-8 ATK"),
+                ("def_debuff",   lambda f: f.update({"defense": max(0, f.get("defense",0) - 8)}), "-8 DEF"),
+                ("speed_debuff", lambda f: f.update({"speed": max(0, f.get("speed",0) - 8)}), "-8 VEL"),
+                ("stun",         lambda f: f.update({"stun_turns": 1}),                       "Stun 1T"),
+                ("dot",          lambda f: f.setdefault("dots",[]).append({"dmg":8,"turns":3}), "Burning 8/T x3"),
+                ("energy_drain", lambda f: f.update({"energy": max(0, f.get("energy",0) - 30)}), "-30 Energía"),
+            ]
+            chosen_self = _r.choice(debuffs)
+            chosen_opp  = _r.choice(debuffs)
+            chosen_self[1](attacker)
+            chosen_opp[1](defender)
+            battle.log.append(f"🔥 **ＯＧ　ＦＩＲＥ** recuerda el laboratorio... los traumas vuelven...")
+            battle.log.append(f"   😰 Fire recibe: **{chosen_self[2]}**")
+            battle.log.append(f"   💢 {defender['emoji']} {defender['name']} recibe: **{chosen_opp[2]}**")
+
+        elif stype == "burnout_fire":
+            main_dmg = skill.get("power", 25)
+            aoe_dmg = skill.get("aoe_power", 15)
+            dot_t = skill.get("dot_turns", 3)
+            dot_p = skill.get("dot_power", 5)
+            def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+            def_active_idx = getattr(battle, "p2_active" if battle.turn == 1 else "p1_active")
+            battle.log.append(f"🔥 **ＯＧ　ＦＩＲＥ** descarga todo el estrés en un ataque!")
+            for i, fig in enumerate(def_team):
+                if fig["hp"] > 0:
+                    dmg = battle.calc_damage(attacker["atk"], fig["defense"], main_dmg if i == def_active_idx else aoe_dmg)
+                    fig["hp"] = max(0, fig["hp"] - dmg)
+                    fig.setdefault("dots", []).append({"dmg": dot_p, "turns": dot_t})
+                    battle.log.append(f"   🔥 {fig['emoji']} {fig['name']}: -{dmg} HP + burning {dot_p}/T x{dot_t}!")
+
+        elif stype == "phoenix_like":
+            splash = skill.get("power", 20)
+            dot_t = skill.get("dot_turns", 4)
+            dot_p = skill.get("dot_power", 5)
+            atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+            # Elegir aliado aleatorio para morir junto a Fire
+            alive_allies = [f for f in atk_team if f["hp"] > 0 and f is not attacker]
+            battle.log.append(f"🔥 **ＯＧ　ＦＩＲＥ**: _...Ya perdí la mayoría... probablemente pueda hacer algo..._")
+            if alive_allies:
+                victim = random.choice(alive_allies)
+                victim["hp"] = 0
+                battle.log.append(f"   💀 **{victim['emoji']} {victim['name']}** y **ＯＧ　ＦＩＲＥ** desaparecen en llamas...")
+            attacker["hp"] = 0
+            # Daño + burning a los aliados restantes
+            for ally in atk_team:
+                if ally["hp"] > 0 and ally is not attacker:
+                    ally["hp"] = max(0, ally["hp"] - splash)
+                    ally.setdefault("dots", []).append({"dmg": dot_p, "turns": dot_t})
+                    battle.log.append(f"   🔥 {ally['emoji']} {ally['name']} -{splash} HP + burning {dot_p}/T x{dot_t}!")
+
         # ── SANS ─────────────────────────────────────────────────────
 
         elif stype == "bone_barrier":
@@ -3087,6 +3745,385 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 battle.log.append(f"<:SANS:1511160523775807588> **Sans** mira todos tus pecados... has matado a **{kills}** figuras.")
                 battle.log.append(f"   ☠️ **{kills} × 20 = {dmg}** de daño. Hora de pagar.")
             defender["hp"] = max(0, defender["hp"] - dmg)
+
+        # ── JEVIL ────────────────────────────────────────────────────
+
+        elif stype == "chaos_chaos":
+            _CHAOS_EFFECTS = ["frozen", "burning", "stun", "force_switch", "poison", "dizziness"]
+            effect = random.choice(_CHAOS_EFFECTS)
+            battle.log.append(f"🃏 **Jevil**: *THE CHAOS IS THE ONLY THING I'M HERE FOR!*")
+            if effect == "frozen":
+                defender["stun_turns"] = 2
+                defender.setdefault("dots", []).append({"dmg": 3, "turns": 2})
+                battle.log.append(f"   ❄️ CHAOS: ¡{defender['name']} congelado! Stun 2t + 3 daño/turno!")
+            elif effect == "burning":
+                defender.setdefault("dots", []).append({"dmg": 5, "turns": 5})
+                battle.log.append(f"   🔥 CHAOS: ¡{defender['name']} en llamas! 5 daño/turno x5t!")
+            elif effect == "stun":
+                defender["stun_turns"] = 2
+                battle.log.append(f"   😵 CHAOS: ¡{defender['name']} aturdido 2 turnos!")
+            elif effect == "force_switch":
+                defender["force_switch_turns"] = 1
+                battle.log.append(f"   🔄 CHAOS: ¡{defender['name']} forzado a cambiar de figura!")
+            elif effect == "poison":
+                defender.setdefault("dots", []).append({"dmg": 8, "turns": 4})
+                battle.log.append(f"   ☠️ CHAOS: ¡{defender['name']} envenenado! 8 daño/turno x4t!")
+            elif effect == "dizziness":
+                defender["dizziness_turns"] = 3
+                battle.log.append(f"   💫 CHAOS: ¡{defender['name']} mareado 3 turnos! (daño reducido)")
+
+        elif stype == "map_revolving":
+            diz_t = skill.get("dizziness_turns", 6)
+            defender["dizziness_turns"] = diz_t
+            defender["dizziness_stun_chance"] = skill.get("stun_chance", 0.50)
+            battle.log.append(f"🃏 **Jevil**: *El mapa empieza a girar...*")
+            battle.log.append(f"   💫 {defender['name']}: dizziness {diz_t} turnos (50% de stun cada turno)!")
+
+        elif stype == "metamorphosis":
+            dur = skill.get("duration", 6)
+            battle.metamorphosis_turns = dur
+            battle.log.append(f"🃏 **Jevil**: *¡METAMORPHOSIS!*")
+            battle.log.append(f"   🔀 ¡Cambio forzado de figura al final de cada turno por {dur} turnos!")
+
+        # ── ANNOYING DOG ─────────────────────────────────────────────
+
+        elif stype == "code_consumer":
+            _BUFFS = ["atk_up", "def_up", "hp_up", "energy_up", "heal"]
+            _DEBUFFS = ["stun", "poison", "burning", "dizziness", "force_switch"]
+            self_effect = random.choice(_BUFFS + _DEBUFFS)
+            enemy_effect = random.choice(_DEBUFFS)
+            battle.log.append(f"🐶 **Toby** se comió parte del código... OH NO!")
+            # Self effect
+            if self_effect == "atk_up":
+                attacker["atk"] = int(attacker["atk"] * 1.2)
+                battle.log.append(f"   📈 Toby +20% ATK!")
+            elif self_effect == "def_up":
+                attacker["defense"] = int(attacker["defense"] * 1.2)
+                battle.log.append(f"   🛡️ Toby +20% DEF!")
+            elif self_effect == "hp_up":
+                attacker["max_hp"] += 30
+                attacker["hp"] += 30
+                battle.log.append(f"   ❤️ Toby +30 HP máximo!")
+            elif self_effect == "energy_up":
+                attacker["energy"] = min(attacker.get("energy_cap", 100), attacker.get("energy", 0) + 30)
+                battle.log.append(f"   ⚡ Toby +30 energía!")
+            elif self_effect == "heal":
+                h = random.randint(15, 35)
+                attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + h)
+                battle.log.append(f"   💚 Toby +{h} HP!")
+            elif self_effect == "stun":
+                attacker["stun_turns"] = 2
+                battle.log.append(f"   😵 Toby... se stuneó a sí mismo...?")
+            elif self_effect == "poison":
+                attacker.setdefault("dots", []).append({"dmg": 5, "turns": 3})
+                battle.log.append(f"   ☠️ Toby se envenenó a sí mismo...!")
+            elif self_effect == "burning":
+                attacker.setdefault("dots", []).append({"dmg": 4, "turns": 4})
+                battle.log.append(f"   🔥 Toby... se prendió fuego...?")
+            elif self_effect == "dizziness":
+                attacker["dizziness_turns"] = 3
+                battle.log.append(f"   💫 Toby se mareó... bien...")
+            elif self_effect == "force_switch":
+                battle.log.append(f"   🔄 Toby decidió irse a pasear...")
+                atk_idx_attr = "p1_active" if battle.turn == 1 else "p2_active"
+                atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+                cur = getattr(battle, atk_idx_attr)
+                alive_others = [i for i, f2 in enumerate(atk_team) if i != cur and f2["hp"] > 0]
+                if alive_others:
+                    setattr(battle, atk_idx_attr, random.choice(alive_others))
+            # Enemy effect
+            if enemy_effect == "stun":
+                defender["stun_turns"] = max(defender.get("stun_turns", 0), 2)
+                battle.log.append(f"   😵 {defender['name']} aturdido 2 turnos!")
+            elif enemy_effect == "poison":
+                defender.setdefault("dots", []).append({"dmg": 6, "turns": 3})
+                battle.log.append(f"   ☠️ {defender['name']} envenenado!")
+            elif enemy_effect == "burning":
+                defender.setdefault("dots", []).append({"dmg": 5, "turns": 4})
+                battle.log.append(f"   🔥 {defender['name']} en llamas!")
+            elif enemy_effect == "dizziness":
+                defender["dizziness_turns"] = 3
+                battle.log.append(f"   💫 {defender['name']} mareado!")
+            elif enemy_effect == "force_switch":
+                defender["force_switch_turns"] = 1
+                battle.log.append(f"   🔄 {defender['name']} forzado a cambiar!")
+
+        elif stype == "bark":
+            dmg = battle.calc_damage(attacker["atk"], defender["defense"], skill.get("power", 15))
+            defender["hp"] = max(0, defender["hp"] - dmg)
+            battle.log.append(f"🐶 **Toby**: *BARK!*")
+            battle.log.append(f"   ⚔️ {defender['name']} -{dmg}HP")
+            _DEBUFFS2 = ["stun", "poison", "burning", "dizziness", "force_switch", "frozen"]
+            deb = random.choice(_DEBUFFS2)
+            if deb == "stun":
+                defender["stun_turns"] = max(defender.get("stun_turns", 0), 2)
+                battle.log.append(f"   😵 {defender['name']} aturdido 2 turnos!")
+            elif deb == "poison":
+                defender.setdefault("dots", []).append({"dmg": 6, "turns": 3})
+                battle.log.append(f"   ☠️ {defender['name']} envenenado! 6/turno x3")
+            elif deb == "burning":
+                defender.setdefault("dots", []).append({"dmg": 5, "turns": 4})
+                battle.log.append(f"   🔥 {defender['name']} en llamas! 5/turno x4")
+            elif deb == "dizziness":
+                defender["dizziness_turns"] = 3
+                battle.log.append(f"   💫 {defender['name']} mareado 3 turnos!")
+            elif deb == "force_switch":
+                defender["force_switch_turns"] = 1
+                battle.log.append(f"   🔄 {defender['name']} forzado a cambiar!")
+            elif deb == "frozen":
+                defender["stun_turns"] = 2
+                defender.setdefault("dots", []).append({"dmg": 3, "turns": 2})
+                battle.log.append(f"   ❄️ {defender['name']} congelado 2t + 3 daño/turno!")
+
+        elif stype == "strange_twirl":
+            battle.log.append(f"🐶 **Toby**: *Este es solo el comienzo de algo más grande...*")
+            playable_keys = [k for k, f2 in FIGURES.items()
+                             if f2.get("price", 0) > 0 and k not in ("santa_vaca", "lobster")]
+            # Replace attacker
+            new_atk_key = random.choice(playable_keys)
+            new_atk = make_fighter(new_atk_key, {"level": attacker.get("level", 1), "xp": 0})
+            atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+            atk_idx_attr = "p1_active" if battle.turn == 1 else "p2_active"
+            cur_atk_idx = getattr(battle, atk_idx_attr)
+            atk_team[cur_atk_idx] = new_atk
+            # Replace defender
+            new_def_key = random.choice(playable_keys)
+            new_def = make_fighter(new_def_key, {"level": defender.get("level", 1), "xp": 0})
+            def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+            def_idx_attr = "p2_active" if battle.turn == 1 else "p1_active"
+            cur_def_idx = getattr(battle, def_idx_attr)
+            def_team[cur_def_idx] = new_def
+            battle.log.append(f"   🌀 ¡Toby fue reemplazado por **{new_atk['emoji']} {new_atk['name']}**!")
+            battle.log.append(f"   🌀 ¡{defender['name']} fue reemplazado por **{new_def['emoji']} {new_def['name']}**!")
+
+        # ── HOMERO SIMPSON ───────────────────────────────────────────
+
+        elif stype == "random_food":
+            foods = skill.get("foods", [])
+            food = random.choice(foods) if foods else None
+            if not food:
+                battle.log.append(f"🍩 **Homero** busca comida... su bolsillo está vacío!")
+            else:
+                eff = food.get("effect")
+                lbl = food.get("label", "Comida")
+                battle.log.append(f"🍩 **Homero** saca: {lbl}!")
+                atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+                def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+
+                if eff == "self_heal":
+                    hp = food.get("power", 20)
+                    attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + hp)
+                    battle.log.append(f"   💚 Homero +{hp}HP. Mmm... donut...")
+
+                elif eff == "duff_heal":
+                    sh = food.get("self_heal", 30)
+                    ah = food.get("ally_heal", 10)
+                    attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + sh)
+                    battle.log.append(f"   🍺 Homero +{sh}HP")
+                    for fig in atk_team:
+                        if fig is not attacker and fig["hp"] > 0:
+                            fig["hp"] = min(fig["max_hp"], fig["hp"] + ah)
+                            battle.log.append(f"   💚 {fig['name']} +{ah}HP")
+
+                elif eff == "chiles":
+                    sd = food.get("self_dmg", 10)
+                    ed = food.get("enemy_dmg", 5)
+                    dp = food.get("dot_power", 4)
+                    dt = food.get("dot_turns", 3)
+                    st = food.get("stun_turns", 1)
+                    attacker["hp"] = max(0, attacker["hp"] - sd)
+                    battle.log.append(f"   🌶️ Homero -{sd}HP (¡PICANTE!)")
+                    for fig in def_team:
+                        if fig["hp"] > 0:
+                            fig["hp"] = max(0, fig["hp"] - ed)
+                            fig.setdefault("dots", []).append({"dmg": dp, "turns": dt})
+                            fig["stun_turns"] = max(fig.get("stun_turns", 0), st)
+                            battle.log.append(f"   🌶️ {fig['name']} -{ed}HP + burning {dp}/t x{dt}t + stun {st}t!")
+
+                elif eff == "mariscos":
+                    sh = food.get("self_heal", 20)
+                    eb = food.get("energy_bonus", 20)
+                    attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + sh)
+                    attacker["energy"] = min(attacker.get("max_energy", 100), attacker.get("energy", 0) + eb)
+                    battle.log.append(f"   🦐 Homero +{sh}HP y +{eb} energía!")
+
+                elif eff == "krusty_burger":
+                    sh = food.get("self_heal", 20)
+                    dn = food.get("def_nerf", 10)
+                    nt = food.get("nerf_turns", 2)
+                    attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + sh)
+                    attacker["defense"] = max(0, attacker.get("defense", 0) - dn)
+                    attacker.setdefault("temp_def_nerf", []).append({"amount": dn, "turns": nt})
+                    battle.log.append(f"   🍔 Homero +{sh}HP pero -{dn} DEF por {nt} turnos...")
+
+                elif eff == "submarine":
+                    sh = food.get("self_heal", 100)
+                    hb = food.get("hp_bonus", 40)
+                    st = food.get("stun_turns", 3)
+                    attacker["hp"] = min(attacker["max_hp"] + hb, attacker["hp"] + sh)
+                    attacker["max_hp"] = attacker.get("max_hp", 100) + hb
+                    attacker["stun_turns"] = st
+                    battle.log.append(f"   🥖 ¡Homero +{sh}HP y +{hb} HP máximo permanente!")
+                    battle.log.append(f"   😴 ...pero Homero se queda dormido {st} turnos de tanto comer.")
+
+                elif eff == "random_heal":
+                    rh = random.randint(food.get("min", 15), food.get("max", 45))
+                    attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + rh)
+                    battle.log.append(f"   🍫 Homero +{rh}HP. (sabor misterioso)")
+
+        elif stype == "homer_choke":
+            dot_t    = skill.get("dot_turns", 5)
+            dot_dmg  = skill.get("power", 25)
+            self_blk = skill.get("self_block_turns", 5)
+            e_stun   = skill.get("enemy_stun_turns", 5)
+            defender.setdefault("dots", []).append({"dmg": dot_dmg, "turns": dot_t})
+            defender["stun_turns"] = e_stun
+            defender["homer_choking"] = True
+            attacker["stun_turns"] = self_blk
+            battle.log.append(f"😠 **Homero**: *Why, you little...!* ¡Agarra a {defender['name']} del cuello!")
+            battle.log.append(f"   🔴 {defender['name']}: {dot_dmg} daño/turno x{dot_t}t + stuneado {e_stun}t")
+            battle.log.append(f"   😤 Homero queda bloqueado {self_blk} turnos...")
+            if skill.get("escape_minigame"):
+                battle.log.append(f"   🎮 ¡{defender['name']} puede intentar escapar completando el minijuego!")
+
+        elif stype == "nuclear_missfunction":
+            success = random.random() < 0.50
+            def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+            alive = [f for f in def_team if f["hp"] > 0]
+            if success:
+                battle.log.append(f"☢️ **Homero**: *Puede que haya presionado el botón incorrecto... D'OH!*")
+                battle.log.append(f"   🎉 **¡WOO-HOO!** ¡Algo salió bien por una vez!")
+                killed = 0
+                for fig in alive:
+                    if killed < 2:
+                        battle.log.append(f"   💀 ¡{fig['name']} fue eliminado por la explosión nuclear!")
+                        fig["hp"] = 0
+                        killed += 1
+                    else:
+                        fig["hp"] = max(0, fig["hp"] - 100)
+                        battle.log.append(f"   💥 {fig['name']} -{100}HP (sobrevivió... por poco)")
+            else:
+                battle.log.append(f"☢️ **Homero**: *Puede que haya presionado el botón incorrecto... D'OH!*")
+                battle.log.append(f"   😭 *We tried our best and we failed miserably. The lesson is: never try.*")
+                atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+                alive_own = [f for f in atk_team if f["hp"] > 0]
+                killed = 0
+                for fig in alive_own:
+                    if killed < 2:
+                        battle.log.append(f"   💀 ¡{fig['name']} fue eliminado por el accidente nuclear!")
+                        fig["hp"] = 0
+                        killed += 1
+                    else:
+                        fig["hp"] = max(0, fig["hp"] - 100)
+                        battle.log.append(f"   💥 {fig['name']} -{100}HP (daño colateral)")
+
+        # ── PAPER MARIO ──────────────────────────────────────────────
+
+        elif stype == "object_menu":
+            # Bot elige un objeto al azar ponderado; en PvP el jugador elige via select
+            items = skill.get("items", [])
+            chosen = random.choice(items) if items else None
+            if not chosen:
+                battle.log.append(f"📄 **Paper Mario** busca en su mochila pero no encuentra nada...")
+            else:
+                itype = chosen.get("type", "damage")
+                ilabel = chosen.get("label", "Objeto")
+                battle.log.append(f"📦 **Paper Mario** saca: {ilabel}!")
+                if itype == "heal":
+                    hp_gain = chosen.get("power", 50)
+                    attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + hp_gain)
+                    battle.log.append(f"   💚 {attacker['name']} +{hp_gain}HP")
+                    if chosen.get("team_heal"):
+                        th = chosen.get("team_heal_power", 25)
+                        atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+                        for fig in atk_team:
+                            if fig is not attacker and fig["hp"] > 0:
+                                fig["hp"] = min(fig["max_hp"], fig["hp"] + th)
+                                battle.log.append(f"   💚 {fig['name']} +{th}HP")
+                elif itype == "damage":
+                    dmg = battle.calc_damage(attacker["atk"], defender["defense"], chosen.get("power", 20))
+                    defender["hp"] = max(0, defender["hp"] - dmg)
+                    battle.log.append(f"   ⚔️ {defender['name']} -{dmg}HP")
+                    if chosen.get("dot"):
+                        dp = chosen.get("dot_power", 5)
+                        dt = chosen.get("dot_turns", 10)
+                        defender.setdefault("dots", []).append({"dmg": dp, "turns": dt})
+                        battle.log.append(f"   🔥 Burning! {dp} daño/turno x{dt} turnos!")
+                    if chosen.get("frozen"):
+                        ft = chosen.get("frozen_turns", 2)
+                        fd = chosen.get("frozen_dot", 3)
+                        defender["stun_turns"] = ft
+                        defender.setdefault("dots", []).append({"dmg": fd, "turns": ft})
+                        battle.log.append(f"   ❄️ Frozen! Aturdido {ft} turnos y {fd} daño/turno!")
+                    if chosen.get("stun"):
+                        st = chosen.get("stun_turns", 2)
+                        if not defender.get("stun_immune"):
+                            defender["stun_turns"] = st
+                            battle.log.append(f"   💥 ¡Bloqueado! {defender['name']} aturdido {st} turnos!")
+                    if chosen.get("aoe"):
+                        def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+                        for fig in def_team:
+                            if fig is not defender and fig["hp"] > 0:
+                                sdmg = battle.calc_damage(attacker["atk"], fig["defense"], chosen.get("aoe_secondary_power", 15))
+                                fig["hp"] = max(0, fig["hp"] - sdmg)
+                                if chosen.get("stun"):
+                                    fig["stun_turns"] = chosen.get("stun_turns", 2)
+                                battle.log.append(f"   💥 {fig['name']} -{sdmg}HP")
+                    if chosen.get("force_switch"):
+                        fs_turns = chosen.get("force_switch_turns", 1)
+                        defender["force_switch_turns"] = fs_turns
+                        battle.log.append(f"   🐢 ¡{defender['name']} es forzado a cambiar de figura!")
+
+        elif stype == "ally_help":
+            allies = skill.get("allies", [])
+            chosen = random.choice(allies) if allies else None
+            if not chosen:
+                battle.log.append(f"📄 **Paper Mario** llama a sus aliados... pero nadie responde.")
+            else:
+                atype = chosen.get("type", "damage")
+                alabel = chosen.get("label", "Aliado")
+                fail_chance = chosen.get("fail_chance", 0.0)
+                failed = random.random() < fail_chance
+                battle.log.append(f"❗ **Paper Mario** llama a: {alabel}!")
+                if failed:
+                    battle.log.append(f"   💨 ...pero {alabel} no llegó a tiempo!")
+                else:
+                    if atype == "damage":
+                        dmg = battle.calc_damage(attacker["atk"], defender["defense"], chosen.get("power", 20))
+                        defender["hp"] = max(0, defender["hp"] - dmg)
+                        battle.log.append(f"   ⚔️ {defender['name']} -{dmg}HP")
+                        if chosen.get("stun"):
+                            st = chosen.get("stun_turns", 2)
+                            if not defender.get("stun_immune"):
+                                defender["stun_turns"] = st
+                                battle.log.append(f"   😵 {defender['name']} aturdido {st} turnos!")
+                        if chosen.get("dot"):
+                            dp = chosen.get("dot_power", 6)
+                            dt = chosen.get("dot_turns", 5)
+                            defender.setdefault("dots", []).append({"dmg": dp, "turns": dt})
+                            battle.log.append(f"   🔥 Burning! {dp}/turno x{dt} turnos!")
+                        if chosen.get("aoe_splash"):
+                            def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+                            for fig in def_team:
+                                if fig is not defender and fig["hp"] > 0:
+                                    fig["hp"] = max(0, fig["hp"] - chosen["aoe_splash"])
+                                    battle.log.append(f"   💣 Splash: {fig['name']} -{chosen['aoe_splash']}HP")
+                        if chosen.get("coin_bonus"):
+                            battle.log.append(f"   💰 ¡+{chosen['coin_bonus']} monedas extra al ganar!")
+                            attacker.setdefault("coin_bonus", 0)
+                            attacker["coin_bonus"] = attacker.get("coin_bonus", 0) + chosen["coin_bonus"]
+                    elif atype == "dot":
+                        dp = chosen.get("dot_power", 15)
+                        dt = chosen.get("dot_turns", 3)
+                        defender.setdefault("dots", []).append({"dmg": dp, "turns": dt})
+                        battle.log.append(f"   ☠️ {defender['name']} recibe {dp} daño/turno x{dt} turnos!")
+                    elif atype == "team_heal":
+                        hp_bonus = chosen.get("power", 40)
+                        atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+                        for fig in atk_team:
+                            if fig["hp"] > 0:
+                                fig["hp"] = min(fig["max_hp"], fig["hp"] + hp_bonus)
+                                battle.log.append(f"   🌸 {fig['name']} +{hp_bonus}HP")
 
         # ── PAPYRUS ──────────────────────────────────────────────
 
@@ -3234,6 +4271,46 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             await finish_turn(interaction, battle, channel_id)
             return
 
+        # Pasiva green_new_form: Green Impostor muere y vuelve en forma 2 tras 3 turnos
+        if defender.get("passive") == "green_new_form" and not defender.get("ejected"):
+            defender["ejected"] = True  # Marcar para no activar dos veces
+            sf = defender.get("key","") + "2"
+            if sf in FIGURES:
+                def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+                idx = def_team.index(defender) if defender in def_team else -1
+                if idx >= 0:
+                    team_key = "p2" if battle.turn == 1 else "p1"
+                    battle.ejected_queue = getattr(battle, "ejected_queue", [])
+                    battle.ejected_queue.append({
+                        "attacker_key": defender.get("key"),
+                        "attacker_team": team_key,
+                        "attacker_idx": idx,
+                        "second_form": sf,
+                        "turns_left": 3,
+                    })
+                    battle.log.append(f"🟢 **{defender['name']}** fue derrotado... pero algo no cuadra.")
+                    battle.log.append(f"   ⏳ Volverá en **3 turnos** en su forma definitiva...")
+
+        # Pasiva maroon_lol_you_thought: igual que green
+        elif defender.get("passive") == "maroon_lol_you_thought" and not defender.get("ejected"):
+            defender["ejected"] = True
+            sf = defender.get("key","") + "2"
+            if sf in FIGURES:
+                def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+                idx = def_team.index(defender) if defender in def_team else -1
+                if idx >= 0:
+                    team_key = "p2" if battle.turn == 1 else "p1"
+                    battle.ejected_queue = getattr(battle, "ejected_queue", [])
+                    battle.ejected_queue.append({
+                        "attacker_key": defender.get("key"),
+                        "attacker_team": team_key,
+                        "attacker_idx": idx,
+                        "second_form": sf,
+                        "turns_left": 3,
+                    })
+                    battle.log.append(f"🟤 **{defender['name']}** fue derrotado... ¿o eso crees?")
+                    battle.log.append(f"   ⏳ Volverá en **3 turnos** en su forma definitiva...")
+
         # Pasiva de OG GAMER 64: cambio de fase al morir (1→2→3→4→muerte definitiva)
         if defender.get("key") == "og_gamer64":
             current_phase = defender.get("og_phase", 1)
@@ -3287,6 +4364,50 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             battle.log.append(f"🔄 ¡Entra **{new_fig['emoji']} {new_fig['name']}**!")
             # Registrar kill en el atacante para el LOVE Check de Sans
             attacker["total_kills"] = attacker.get("total_kills", 0) + 1
+            # Pasiva Papelemental: 20% de que aparezca un círculo elemental al derrotar una figura
+            if attacker.get("passive") == "papelemental" and random.random() < 0.20:
+                circles = [
+                    ("🔥 Brazos Desplegables", "dot", 10, 5),
+                    ("💧 Agua", "water", 24, 4),
+                    ("🔥 Fuego", "fire", 26, 0),
+                    ("🌍 Tierra", "earth", 24, 0),
+                    ("❄️ Hielo", "ice", 28, 3),
+                ]
+                circle = random.choice(circles)
+                cname, ctype, cpower, cturns = circle
+                battle.log.append(f"📄 **¡Círculo Papelemental activado!** {cname} aparece!")
+                atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+                def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+                cur_def_idx = getattr(battle, "p2_active" if battle.turn == 1 else "p1_active")
+                cur_def = def_team[cur_def_idx] if cur_def_idx < len(def_team) else None
+                if ctype == "dot" and cur_def:
+                    cur_def.setdefault("dots", []).append({"dmg": cpower, "turns": cturns})
+                    battle.log.append(f"   ☠️ Brazos: {cur_def['name']} {cpower} daño/turno x{cturns} turnos!")
+                elif ctype == "water" and cur_def:
+                    dmg_w = battle.calc_damage(attacker["atk"], cur_def["defense"], cpower)
+                    cur_def["hp"] = max(0, cur_def["hp"] - dmg_w)
+                    cur_def["stun_turns"] = 2
+                    cur_def["atk"] = max(1, int(cur_def["atk"] * 0.85))
+                    cur_def["defense"] = max(0, int(cur_def["defense"] * 0.85))
+                    battle.log.append(f"   💧 Agua: {cur_def['name']} -{dmg_w}HP, aturdido 2t, -15% ATK/DEF!")
+                elif ctype == "fire":
+                    for fig in def_team:
+                        if fig["hp"] > 0:
+                            dmg_f = battle.calc_damage(attacker["atk"], fig["defense"], cpower)
+                            fig["hp"] = max(0, fig["hp"] - dmg_f)
+                            fig.setdefault("dots", []).append({"dmg": 5, "turns": 3})
+                            battle.log.append(f"   🔥 Fuego: {fig['name']} -{dmg_f}HP + burning!")
+                elif ctype == "earth" and cur_def:
+                    dmg_e = battle.calc_damage(attacker["atk"], cur_def["defense"], cpower)
+                    cur_def["hp"] = max(0, cur_def["hp"] - dmg_e)
+                    cur_def["force_switch_turns"] = 1
+                    battle.log.append(f"   🌍 Tierra: {cur_def['name']} -{dmg_e}HP y forzado a cambiar!")
+                elif ctype == "ice" and cur_def:
+                    dmg_i = battle.calc_damage(attacker["atk"], cur_def["defense"], cpower)
+                    cur_def["hp"] = max(0, cur_def["hp"] - dmg_i)
+                    cur_def["stun_turns"] = 3
+                    cur_def.setdefault("dots", []).append({"dmg": 8, "turns": 3})
+                    battle.log.append(f"   ❄️ Hielo: {cur_def['name']} -{dmg_i}HP, frozen 3t (8 daño/turno)!")
             # También guardar en la DB del usuario para kills globales (LOVE Check permanente)
             _register_kill_for_love(attacker.get("owner_id"), battle)
             battle.turn = 2 if battle.turn == 1 else 1
@@ -3296,22 +4417,89 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             await end_battle(interaction, battle, channel_id, winner_turn=battle.turn)
             return
 
+    # Metamorphosis de Jevil: forzar cambio al final del turno
+    if getattr(battle, "metamorphosis_turns", 0) > 0:
+        battle.metamorphosis_turns -= 1
+        for team, idx_attr in [(battle.p1_team, "p1_active"), (battle.p2_team, "p2_active")]:
+            cur = getattr(battle, idx_attr)
+            alive_others = [i for i, f2 in enumerate(team) if i != cur and f2["hp"] > 0]
+            if alive_others:
+                new_idx = random.choice(alive_others)
+                setattr(battle, idx_attr, new_idx)
+                battle.log.append(f"🃏 **¡METAMORPHOSIS!** ¡{team[new_idx]['emoji']} {team[new_idx]['name']} entra al campo!")
+        if battle.metamorphosis_turns == 0:
+            battle.log.append(f"🃏 El efecto de METAMORPHOSIS ha terminado.")
+
+    # Jevil Passive: TRUE GOD OF CHAOS — 25% por turno de buff/debuff random a TODOS
+    all_teams = list(battle.p1_team) + list(battle.p2_team)
+    all_alive = [f for f in all_teams if f["hp"] > 0]
+    for fig in all_alive:
+        if fig.get("chaos_passive_active") and fig["hp"] > 0:
+            if random.random() < 0.25:
+                _ALL_FIGS_ALIVE = [f2 for f2 in all_alive]
+                target = random.choice(_ALL_FIGS_ALIVE)
+                _CHAOS_ALL = ["atk_up", "def_up", "hp_heal", "stun", "poison", "burning", "dizziness", "frozen"]
+                eff = random.choice(_CHAOS_ALL)
+                battle.log.append(f"🃏 **¡TRUE GOD OF CHAOS!** El caos afecta a **{target['name']}**...")
+                if eff == "atk_up":
+                    target["atk"] = int(target["atk"] * 1.15)
+                    battle.log.append(f"   ⚔️ {target['name']} +15% ATK!")
+                elif eff == "def_up":
+                    target["defense"] = int(target["defense"] * 1.15)
+                    battle.log.append(f"   🛡️ {target['name']} +15% DEF!")
+                elif eff == "hp_heal":
+                    h = random.randint(10, 25)
+                    target["hp"] = min(target["max_hp"], target["hp"] + h)
+                    battle.log.append(f"   💚 {target['name']} +{h}HP!")
+                elif eff == "stun":
+                    target["stun_turns"] = max(target.get("stun_turns", 0), 1)
+                    battle.log.append(f"   😵 {target['name']} aturdido 1t!")
+                elif eff == "poison":
+                    target.setdefault("dots", []).append({"dmg": 6, "turns": 3})
+                    battle.log.append(f"   ☠️ {target['name']} envenenado!")
+                elif eff == "burning":
+                    target.setdefault("dots", []).append({"dmg": 4, "turns": 4})
+                    battle.log.append(f"   🔥 {target['name']} en llamas!")
+                elif eff == "dizziness":
+                    target["dizziness_turns"] = max(target.get("dizziness_turns", 0), 2)
+                    battle.log.append(f"   💫 {target['name']} mareado!")
+                elif eff == "frozen":
+                    target["stun_turns"] = max(target.get("stun_turns", 0), 2)
+                    target.setdefault("dots", []).append({"dmg": 3, "turns": 2})
+                    battle.log.append(f"   ❄️ {target['name']} congelado!")
+
     # Cambiar turno
     battle.turn = 2 if battle.turn == 1 else 1
     await finish_turn(interaction, battle, channel_id)
 
 async def finish_turn(interaction, battle: BattleState, channel_id: int):
     """Actualiza el embed y, si toca el bot, ejecuta su turno."""
+    view = get_battle_view(battle)
+    embed = battle.get_embed()
+
     if battle.is_bot and battle.turn == 2:
-        embed = battle.get_embed()
-        await interaction.response.edit_message(embed=embed, view=None)
+        await _safe_edit(interaction, battle, embed, None)
         await asyncio.sleep(1.2)
         await bot_turn(interaction, battle, channel_id)
         return
 
-    view = get_battle_view(battle)
-    embed = battle.get_embed()
-    await interaction.response.edit_message(embed=embed, view=view)
+    await _safe_edit(interaction, battle, embed, view)
+
+async def _safe_edit(interaction, battle, embed, view):
+    """Edita el mensaje de batalla de forma segura.
+    Si la interaction ya expiró (>15 min), edita directamente el mensaje."""
+    try:
+        if not interaction.response.is_done():
+            await interaction.response.edit_message(embed=embed, view=view)
+        else:
+            await interaction.edit_original_response(embed=embed, view=view)
+    except Exception:
+        # Fallback: editar el mensaje directamente si la interaction expiró
+        try:
+            if battle.message:
+                await battle.message.edit(embed=embed, view=view)
+        except Exception as e:
+            print(f"⚠️ No se pudo editar mensaje de batalla: {e}")
 
 async def bot_turn(interaction, battle: BattleState, channel_id: int):
     """IA del bot: ataque básico siempre disponible + habilidades cuando hay energía."""
@@ -3745,7 +4933,13 @@ async def bot_turn(interaction, battle: BattleState, channel_id: int):
 
     battle.turn = 1
     view = get_battle_view(battle)
-    await interaction.message.edit(embed=battle.get_embed(), view=view)
+    try:
+        await battle.message.edit(embed=battle.get_embed(), view=view)
+    except Exception:
+        try:
+            await interaction.edit_original_response(embed=battle.get_embed(), view=view)
+        except Exception as e:
+            print(f"⚠️ bot_turn edit error: {e}")
 
 async def end_battle(interaction, battle: BattleState, channel_id: int, winner_turn: int):
     """Cierra la batalla y da recompensas."""
@@ -3866,9 +5060,9 @@ async def end_battle(interaction, battle: BattleState, channel_id: int, winner_t
         del active_battles[channel_id]
 
     try:
-        await interaction.response.edit_message(embed=embed, view=None)
-    except Exception:
-        await interaction.message.edit(embed=embed, view=None)
+        await _safe_edit(interaction, battle, embed, None)
+    except Exception as e:
+        print(f"⚠️ end_battle edit error: {e}")
 
     # Drops de misión activa (quest) — post-batalla
     db3 = load_db()
@@ -3892,6 +5086,7 @@ GUILD_ID = 1236294131534401647  # ← PON AQUÍ EL ID DE TU SERVIDOR (clic derec
 @bot.event
 async def on_ready():
     print(f"✅ {bot.user} está en línea!")
+    _reset_shops()  # Inicializar tiendas al arrancar
     await bot.tree.sync()
     if GUILD_ID:
         guild = discord.Object(id=GUILD_ID)
@@ -4064,16 +5259,30 @@ def build_figure_embed(user, unique_figs, page, viewed_user_id=None):
     if count > 1:
         embed.add_field(name="📦 Copias", value=f"Tienes **{count}** de esta figura", inline=False)
 
-    embed.add_field(
-        name="📊 Stats",
-        value=(
-            f"❤️ **Vida:** {apply_level_bonus(fig.get('hp',0), lvl)}\n"
-            f"⚔️ **Ataque:** {apply_level_bonus(fig.get('attack',0), lvl)}\n"
-            f"🛡️ **Defensa:** {apply_level_bonus(fig.get('defense',0), lvl)}\n"
-            f"⚡ **Velocidad:** {fig.get('speed',0)}"
-        ),
-        inline=True
-    )
+    # Annoying Dog: stats ocultas en /misfiguras
+    if key == "annoying_dog":
+        embed.add_field(
+            name="📊 Stats",
+            value=(
+                "❤️ **Vida:** 290\n"
+                "⚔️ **Ataque:** ???\n"
+                "🛡️ **Defensa:** ???\n"
+                "⚡ **Velocidad:** ???\n"
+                "\n*Toby se comió sus propias stats...*"
+            ),
+            inline=True
+        )
+    else:
+        embed.add_field(
+            name="📊 Stats",
+            value=(
+                f"❤️ **Vida:** {apply_level_bonus(fig.get('hp',0), lvl)}\n"
+                f"⚔️ **Ataque:** {apply_level_bonus(fig.get('attack',0), lvl)}\n"
+                f"🛡️ **Defensa:** {apply_level_bonus(fig.get('defense',0), lvl)}\n"
+                f"⚡ **Velocidad:** {fig.get('speed',0)}"
+            ),
+            inline=True
+        )
     embed.add_field(
         name="🏅 Progreso",
         value=(f"Nivel: **{lvl}**\nXP: **{xp}/{xp_to_level_up(lvl)}**"),
@@ -4372,7 +5581,7 @@ BOT_ROSTER = [
     },
     {
         "id": "impostor_negro",
-        "name": "🔪 BLACK IMPOSTOR",
+        "name": "🔪 VS IMPOSTOR! 🔪",
         "desc": "7 impostores. Tú y 3 figuras. ¿Puedes con todos?",
         "difficulty": 8,
         "team": ["boss_impostor_red","boss_impostor_green","boss_impostor_white",
@@ -4421,13 +5630,145 @@ FIGURE_SKILLS["boss_nino3"] = [
 ]
 
 # Paper Mario
-FIGURES["boss_paper1"] = {"name":"Paper Mario","emoji":"📄","rarity":"legendario","price":0,"hp":220,"attack":42,"defense":35,"speed":38,"image":""}
+FIGURES["boss_paper1"] = {"name":"Paper Mario","emoji":"📄","rarity":"legendario","price":0,"hp":220,"attack":42,"defense":35,"speed":38,"image":"","passive":"papelemental","passive2":"timing"}
 FIGURES["boss_paper2"] = {"name":"Paper Bowser","emoji":"🐢","rarity":"legendario","price":0,"hp":280,"attack":50,"defense":45,"speed":20,"image":""}
 FIGURES["boss_paper3"] = {"name":"Paper Peach","emoji":"👸","rarity":"legendario","price":0,"hp":190,"attack":35,"defense":30,"speed":42,"image":""}
 FIGURE_SKILLS["boss_paper1"] = [
-    {"name":"Martillo de Papel","cost":30,"type":"damage",  "power":28, "desc":"Saca su martillo de papel y golpea."},
-    {"name":"Estrella de Papel","cost":60,"type":"heal",    "power":50, "team_heal":True,"team_heal_power":25,"desc":"Una estrella de papel cura a todo el equipo."},
-    {"name":"Modo Ultrahammer", "cost":100,"type":"damage", "power":90, "stun":True,"desc":"El martillo definitivo que aplasta todo."},
+    {
+        "name": "Paper Hammer",
+        "cost": 30,
+        "type": "damage",
+        "power": 28,
+        "desc": "Saca su martillo de papel y golpea. 28 de daño.",
+    },
+    {
+        "name": "Object Menu",
+        "cost": 60,
+        "type": "object_menu",
+        "desc": (
+            "Paper Mario saca su menú de objetos. Elige uno:\n"
+            "📄 Estrella de Papel — cura 50 HP al activo y 25 HP al equipo.\n"
+            "🌸 Flor de Fuego — 28 de daño + burning 10 turnos.\n"
+            "❄️ Flor de Hielo — 28 de daño + frozen 2 turnos (stun + 3 daño/turno).\n"
+            "💥 Bloque POW — 15 de daño a todos los rivales + stun 2 turnos.\n"
+            "🐢 Cola — 19 de daño + fuerza cambio de figura rival."
+        ),
+        "items": [
+            {
+                "key": "paper_star",
+                "label": "📄 Estrella de Papel",
+                "type": "heal",
+                "power": 50,
+                "team_heal": True,
+                "team_heal_power": 25,
+            },
+            {
+                "key": "fire_flower",
+                "label": "🌸 Flor de Fuego",
+                "type": "damage",
+                "power": 28,
+                "dot": True,
+                "dot_power": 5,
+                "dot_turns": 10,
+            },
+            {
+                "key": "ice_flower",
+                "label": "❄️ Flor de Hielo",
+                "type": "damage",
+                "power": 28,
+                "frozen": True,
+                "frozen_turns": 2,
+                "frozen_dot": 3,
+            },
+            {
+                "key": "pow_block",
+                "label": "💥 Bloque POW",
+                "type": "damage",
+                "power": 15,
+                "aoe": True,
+                "aoe_secondary_power": 15,
+                "stun": True,
+                "stun_turns": 2,
+            },
+            {
+                "key": "tail",
+                "label": "🐢 Cola",
+                "type": "damage",
+                "power": 19,
+                "force_switch": True,
+                "force_switch_turns": 1,
+            },
+        ],
+    },
+    {
+        "name": "Ally Help",
+        "cost": 100,
+        "type": "ally_help",
+        "desc": (
+            "¿Necesitas ayuda? ¡Presiona X para obtener un consejo!\n"
+            "Elige un aliado:\n"
+            "🧙 Kamek — 24 daño + stun 2t (17% fallo).\n"
+            "🎪 Bowser Jr — 15 DOT x3t (18% fallo).\n"
+            "🔬 Prof. Toad — 15 daño + 20 monedas (16% fallo).\n"
+            "🐉 Bowser — 30 daño + burning 5t (15% fallo).\n"
+            "💣 Bombi — 24 daño + 10 splash + stun 2t (16% fallo).\n"
+            "🌸 Olivia — +40 HP a todos los aliados."
+        ),
+        "allies": [
+            {
+                "key": "kamek",
+                "label": "🧙 Kamek",
+                "type": "damage",
+                "power": 24,
+                "stun": True,
+                "stun_turns": 2,
+                "fail_chance": 0.17,
+            },
+            {
+                "key": "bowser_jr",
+                "label": "🎪 Bowser Jr",
+                "type": "dot",
+                "dot_power": 15,
+                "dot_turns": 3,
+                "fail_chance": 0.18,
+            },
+            {
+                "key": "prof_toad",
+                "label": "🔬 Professor Toad",
+                "type": "damage",
+                "power": 15,
+                "coin_bonus": 20,
+                "fail_chance": 0.16,
+            },
+            {
+                "key": "bowser",
+                "label": "🐉 Bowser",
+                "type": "damage",
+                "power": 30,
+                "dot": True,
+                "dot_power": 6,
+                "dot_turns": 5,
+                "fail_chance": 0.15,
+            },
+            {
+                "key": "bombi",
+                "label": "💣 Bombi",
+                "type": "damage",
+                "power": 24,
+                "aoe_splash": 10,
+                "stun": True,
+                "stun_turns": 2,
+                "fail_chance": 0.16,
+            },
+            {
+                "key": "olivia",
+                "label": "🌸 Olivia",
+                "type": "team_heal",
+                "power": 40,
+                "fail_chance": 0.0,
+            },
+        ],
+    },
 ]
 FIGURE_SKILLS["boss_paper2"] = [
     {"name":"Lanzallamas",   "cost":30,"type":"damage","power":32,"aoe":True,"aoe_secondary_power":18,"desc":"Escupe fuego a todos los rivales."},
@@ -5198,13 +6539,27 @@ def make_bot_fight_callback(bot_data, user, user_discord_id):
         battle.bot_reward_coins = bot_data["reward_coins"]
         battle.bot_reward_xp = bot_data["reward_xp"]
 
+        # Aplicar buffs de receta activos del usuario
+        papyrus_result = _apply_recipe_buffs(usr, battle.p1_team, db2)
+
         active_battles[inter.channel_id] = battle
 
         boss_title = "💀 ¡BATALLA CONTRA EL JEFE FINAL!" if bot_data.get("is_boss") else f"⚔️ ¡BATALLA vs {bot_data['name']}!"
         embed = battle.get_embed(title=boss_title)
+        if papyrus_result == "good":
+            embed.add_field(
+                name="🍝 Spaghetti de Langosta",
+                value="**NYEHEHEH! MY COOKING SAVED THE DAY!**\n+25 ATK · +40 HP · +25 DEF a todo tu equipo.",
+                inline=False
+            )
+        elif papyrus_result == "bad":
+            embed.add_field(
+                name="🍝 Spaghetti de Langosta",
+                value="**Nyeh... heh... heh? Why is it moving?**\n-25 ATK · -40 HP · -25 DEF a todo tu equipo. 💀",
+                inline=False
+            )
         view = get_battle_view(battle)
         await inter.response.edit_message(embed=embed, view=view)
-        # Guardar referencia al mensaje para poder editarlo al cambiar figura
         battle.message = await inter.original_response()
     return callback
 
@@ -5655,6 +7010,11 @@ async def retar(interaction: discord.Interaction, rival: discord.Member):
         )
         battle.p1_name = get_user(db2, interaction.user.id)["name"]
         battle.p2_name = get_user(db2, rival.id)["name"]
+
+        # Aplicar buffs de receta activos de ambos jugadores
+        p1_papyrus = _apply_recipe_buffs(u1, battle.p1_team, db2)
+        p2_papyrus = _apply_recipe_buffs(u2, battle.p2_team, db2)
+        save_db(db2)
         active_battles[interaction.channel_id] = battle
         view = get_battle_view(battle)
         await btn_inter.response.edit_message(embed=battle.get_embed(title="⚔️ ¡LA BATALLA COMIENZA!"), view=view)
@@ -6470,6 +7830,7 @@ INGREDIENTS = {
     "🧀": "Queso",
     "🍫": "Chocolate",
     "🐮": "Santa Vaca",
+    "🍝": "Spaghetti",
 }
 
 RECIPES = [
@@ -6574,6 +7935,21 @@ RECIPES = [
         "hp_bonus": 30,
         "coins_mult": 1.5,
     },
+    # Receta especial: Spaghetti de Langosta (requiere el ingrediente de Papyrus)
+    {
+        "name": "🦞🍝 Spaghetti de Langosta",
+        "ingredients": ["🦞", "🍝"],
+        "effect": "papyrus_special",
+        "value": 1,
+        "desc": (
+            "¡La receta secreta de Papyrus! +25 ATK, +40 HP y +25 DEF a todas tus figuras "
+            "en la próxima batalla. ¡NYEH HEH HEH!"
+        ),
+        "turns": 1,
+        "atk_bonus": 25,
+        "hp_bonus": 40,
+        "def_bonus": 25,
+    },
 ]
 
 # Combinaciones fallidas (ingredientes sin sinergia)
@@ -6609,9 +7985,16 @@ lobster_madre_active = False
 BATTLE_INGREDIENT_DROP_CHANCE = 40  # 40% de probabilidad de conseguir ingrediente al ganar batalla
 
 def give_battle_ingredient(user):
-    """Da un ingrediente aleatorio al usuario (excepto langosta, que va por /lobster)."""
+    """Da un ingrediente aleatorio al usuario (excepto langosta, que va por /lobster).
+    Si Papyrus está en el equipo, 40% de probabilidad de obtener Spaghetti."""
     non_lobster = [k for k in INGREDIENTS if k != "🦞"]
-    ingredient = random.choice(non_lobster)
+    # Papyrus bonus: si está en el equipo, sube la prob de spaghetti
+    team_keys = [user["figures"][i]["key"] for i in user.get("team", [])
+                 if i is not None and i < len(user.get("figures", []))]
+    if "papyrus" in team_keys and random.randint(1, 100) <= 40:
+        ingredient = "🍝"
+    else:
+        ingredient = random.choice(non_lobster)
     if "ingredients" not in user:
         user["ingredients"] = {}
     user["ingredients"][ingredient] = user["ingredients"].get(ingredient, 0) + 1
@@ -8641,6 +10024,51 @@ def _get_love_kills(battle, attacker) -> int:
             pass
     return battle_kills
 
+def _apply_recipe_buffs(user_data: dict, team: list, db) -> str | None:
+    """Aplica los buffs de receta activos del usuario a su equipo y los consume.
+    Devuelve 'good'/'bad' si había receta papyrus_special, None si no."""
+    buffs = user_data.get("buffs", [])
+    if not buffs:
+        return None
+    remaining = []
+    papyrus_result = None
+    # El resultado de papyrus se tira UNA sola vez para todo el equipo
+    papyrus_rolled = False
+    papyrus_good   = False
+    for b in buffs:
+        effect = b.get("effect")
+        val    = b.get("value", 0)
+        turns  = b.get("turns", 1)
+        if effect == "papyrus_special" and not papyrus_rolled:
+            papyrus_good   = random.randint(1, 100) <= 90
+            papyrus_rolled = True
+            papyrus_result = "good" if papyrus_good else "bad"
+        for fig in team:
+            if effect == "hp_boost":
+                fig["hp"]     = fig["hp"] + val
+                fig["max_hp"] = fig["max_hp"] + val
+            elif effect == "atk_boost":
+                fig["atk"] = fig.get("atk", 0) + val
+            elif effect in ("all_boost",):
+                fig["atk"]    = fig.get("atk", 0) + b.get("atk_bonus", 0)
+                hp_b          = b.get("hp_bonus", 0)
+                fig["hp"]     = fig["hp"] + hp_b
+                fig["max_hp"] = fig["max_hp"] + hp_b
+            elif effect == "papyrus_special":
+                sign = 1 if papyrus_good else -1
+                fig["atk"]    = max(1, fig.get("atk", 0) + sign * b.get("atk_bonus", 25))
+                hp_b          = b.get("hp_bonus", 40)
+                def_b         = b.get("def_bonus", 25)
+                fig["hp"]     = max(1, fig["hp"] + sign * hp_b)
+                fig["max_hp"] = max(1, fig["max_hp"] + sign * hp_b)
+                fig["defense"]= max(0, fig.get("defense", 0) + sign * def_b)
+        if effect in ("coins_boost", "xp_boost"):
+            remaining.append(b)
+        elif turns > 1:
+            remaining.append({**b, "turns": turns - 1})
+    user_data["buffs"] = remaining
+    return papyrus_result
+
 def _check_player_levelup(user_data: dict) -> list[int]:
     """Sube el nivel del jugador. Por cada nivel nuevo da 1 skill point."""
     new_levels = []
@@ -9297,6 +10725,66 @@ def _open_mystery_pack(pack_id: str, user_data: dict, db) -> dict:
 
     return {"fig": fig_key, "ingredient": ingredient, "recipe": recipe}
 
+
+# ============================================================
+#  SISTEMA DE TIENDA GLOBAL CON RESET CADA 3 HORAS
+# ============================================================
+import time as _time
+
+SHOP_RESET_INTERVAL = 3 * 3600  # 3 horas en segundos
+
+# Cuántas figuras están disponibles en cada tienda (rango min-max %)
+SHOP_AVAILABILITY = {
+    "gamer":    (0.65, 0.80),
+    "bar":      (0.40, 0.70),
+    "mercado":  (0.70, 0.85),
+    "toad":     (0.30, 0.55),
+    "tails":    (0.45, 0.65),
+    "acertijo": (0.20, 0.50),
+}
+
+# Estado global de las tiendas
+_shop_state = {
+    "last_reset": 0.0,
+    "available": {}   # {shop_id: set of available fig_keys}
+}
+
+def _get_all_buyable_figures() -> list:
+    """Devuelve todas las figuras comprables (price > 0, no exclusivas de jefe)."""
+    excluded = {"roblox_boss", "santa_vaca", "lobster", "janedoe"}
+    # Añadir figuras de jefes (boss_*)
+    excluded.update(k for k in FIGURES if k.startswith("boss_") or k.startswith("antifas"))
+    return [k for k, v in FIGURES.items()
+            if v.get("price", 0) > 0 and k not in excluded]
+
+def _reset_shops():
+    """Genera un nuevo estado aleatorio para todas las tiendas."""
+    all_figs = _get_all_buyable_figures()
+    for shop_id, (min_pct, max_pct) in SHOP_AVAILABILITY.items():
+        pct = random.uniform(min_pct, max_pct)
+        count = max(3, int(len(all_figs) * pct))
+        available = set(random.sample(all_figs, min(count, len(all_figs))))
+        _shop_state["available"][shop_id] = available
+    _shop_state["last_reset"] = _time.time()
+    print(f"🔄 Tiendas reseteadas — próximo reset en 3 horas")
+
+def _check_shop_reset():
+    """Resetea las tiendas si han pasado 3 horas."""
+    now = _time.time()
+    if now - _shop_state["last_reset"] >= SHOP_RESET_INTERVAL:
+        _reset_shops()
+
+def _time_until_reset() -> str:
+    """Devuelve el tiempo restante hasta el próximo reset."""
+    elapsed = _time.time() - _shop_state["last_reset"]
+    remaining = max(0, SHOP_RESET_INTERVAL - elapsed)
+    h = int(remaining // 3600)
+    m = int((remaining % 3600) // 60)
+    s = int(remaining % 60)
+    if h > 0: return f"{h}h {m}m"
+    if m > 0: return f"{m}m {s}s"
+    return f"{s}s"
+
 @bot.tree.command(name="tienda", description="Elige entre 6 tiendas y compra figuras")
 async def tienda(interaction: discord.Interaction):
     db   = load_db()
@@ -9876,157 +11364,201 @@ async def secret_store(interaction: discord.Interaction, codigo: str = ""):
 # ============================================================
 GET_AUTHORIZED_ID = 1236293193893412975
 
+# Normalización de rarezas para /get
+_RARITY_NORM = {
+    "común":"común","comun":"común",
+    "raro":"raro",
+    "épico":"épico","epico":"épico",
+    "legendario":"legendario","Legendario":"legendario",
+    "mítico":"mítico","Mítico":"mítico",
+}
+_RARITY_ORDER  = ["común","raro","épico","legendario","mítico"]
+_RARITY_EMOJI  = {"común":"⚪","raro":"🔵","épico":"🟣","legendario":"🌟","mítico":"🔱"}
+_RARITY_STYLE  = {
+    "común":      discord.ButtonStyle.secondary,
+    "raro":       discord.ButtonStyle.primary,
+    "épico":      discord.ButtonStyle.primary,
+    "legendario": discord.ButtonStyle.success,
+    "mítico":     discord.ButtonStyle.danger,
+}
+
+def _get_all_by_rarity():
+    """Agrupa TODAS las figuras (incluyendo boss y precio 0) por rareza normalizada."""
+    by_r = {r: [] for r in _RARITY_ORDER}
+    for key, fig in FIGURES.items():
+        if not fig.get("name"):
+            continue
+        norm = _RARITY_NORM.get(fig.get("rarity","común"), "común")
+        by_r[norm].append((key, fig))
+    return by_r
+
 @bot.tree.command(name="get", description="[GAMER64] El pase dorado y exclusivo...")
 async def get_cmd(interaction: discord.Interaction):
     if interaction.user.id != GET_AUTHORIZED_ID:
         await interaction.response.send_message("❌ No tienes acceso a este comando.", ephemeral=True)
         return
-
     db   = load_db()
     user = get_user(db, interaction.user.id)
     if not user:
         await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
         return
+    uid    = interaction.user.id
+    by_r   = _get_all_by_rarity()
 
-    uid = interaction.user.id
-
-    # Agrupar figuras por rareza para el menú
-    rarity_order = ["común", "raro", "épico", "epico", "legendario", "Legendario", "mítico", "Mítico"]
-    rarity_label = {
-        "común": "⚪ Común", "raro": "🔵 Raro",
-        "épico": "🟣 Épico", "epico": "🟣 Épico",
-        "legendario": "🌟 Legendario", "Legendario": "🌟 Legendario",
-        "mítico": "🔱 Mítico", "Mítico": "🔱 Mítico",
-    }
-
-    # Todas las figuras disponibles (incluyendo secretas y exclusivas de jefe)
-    all_figs = {k: v for k, v in FIGURES.items() if v.get("name")}
-
-    # Organizar por rareza
-    by_rarity = {}
-    for key, fig in all_figs.items():
-        r = fig.get("rarity", "común")
-        by_rarity.setdefault(r, []).append((key, fig))
-
-    def build_get_embed():
+    def build_main_embed():
         embed = discord.Embed(
             title="🥇 PASE DORADO — /get",
-            description="Elige una rareza para ver las figuras disponibles.\nPuedes obtener **cualquier figura** del juego.",
+            description="Elige una rareza y luego selecciona la figura del menú desplegable.",
             color=0xffd700
         )
-        for r in rarity_order:
-            figs_in_r = by_rarity.get(r, [])
-            if not figs_in_r:
+        for r in _RARITY_ORDER:
+            figs = by_r[r]
+            if not figs:
                 continue
-            names = " · ".join(f"{f['emoji']} {f['name']}" for _, f in figs_in_r[:10])
-            if len(figs_in_r) > 10:
-                names += f" *(+{len(figs_in_r)-10} más)*"
-            label = rarity_label.get(r, r)
-            embed.add_field(name=f"{label} ({len(figs_in_r)})", value=names, inline=False)
-        embed.set_footer(text="Selecciona una rareza con los botones de abajo.")
+            preview = " · ".join(f"{f['emoji']} {f['name']}" for _, f in figs[:8])
+            if len(figs) > 8:
+                preview += f" *(+{len(figs)-8} más)*"
+            embed.add_field(
+                name=f"{_RARITY_EMOJI[r]} {r.capitalize()} ({len(figs)})",
+                value=preview, inline=False
+            )
         return embed
 
-    def build_rarity_view():
+    def build_main_view():
         view = discord.ui.View(timeout=180)
-        seen = set()
-        for r in rarity_order:
-            if r in seen or not by_rarity.get(r):
+        options = []
+        for r in _RARITY_ORDER:
+            if not by_r[r]:
                 continue
-            seen.add(r)
-            label = rarity_label.get(r, r)
-            styles = {
-                "común": discord.ButtonStyle.secondary,
-                "raro": discord.ButtonStyle.primary,
-                "épico": discord.ButtonStyle.primary,
-                "epico": discord.ButtonStyle.primary,
-                "legendario": discord.ButtonStyle.success,
-                "Legendario": discord.ButtonStyle.success,
-                "mítico": discord.ButtonStyle.danger,
-                "Mítico": discord.ButtonStyle.danger,
-            }
-            btn = discord.ui.Button(
-                label=label,
-                style=styles.get(r, discord.ButtonStyle.secondary),
-                custom_id=f"get_rarity_{r}"
-            )
-            def make_rarity_cb(rarity=r):
-                async def cb(inter: discord.Interaction):
-                    if inter.user.id != uid:
-                        await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
-                        return
-                    await _show_get_figures(inter, rarity, by_rarity, uid, db)
-                return cb
-            btn.callback = make_rarity_cb()
-            view.add_item(btn)
+            options.append(discord.SelectOption(
+                label=f"{r.capitalize()} ({len(by_r[r])} figuras)",
+                value=r,
+                description=f"{_RARITY_EMOJI[r]} Elige una figura de rareza {r}",
+                emoji=_RARITY_EMOJI[r],
+            ))
+        select = discord.ui.Select(
+            placeholder="🥇 Elige una rareza...",
+            options=options,
+            custom_id="get_rarity_select",
+            row=0,
+        )
+        async def rarity_select_cb(inter: discord.Interaction):
+            if inter.user.id != uid:
+                await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                return
+            chosen_rarity = inter.data["values"][0]
+            await _show_get_select(inter, chosen_rarity, by_r, uid, db, page=0)
+        select.callback = rarity_select_cb
+        view.add_item(select)
         return view
 
     await interaction.response.send_message(
-        embed=build_get_embed(),
-        view=build_rarity_view(),
-        ephemeral=True
+        embed=build_main_embed(), view=build_main_view(), ephemeral=True
     )
 
-async def _show_get_figures(interaction: discord.Interaction, rarity: str, by_rarity: dict, uid: int, db):
-    """Muestra las figuras de una rareza para que Gamer64 elija cuál obtener."""
-    figs_in_r = by_rarity.get(rarity, [])
-    rarity_label = {
-        "común":"⚪ Común","raro":"🔵 Raro","épico":"🟣 Épico","epico":"🟣 Épico",
-        "legendario":"🌟 Legendario","Legendario":"🌟 Legendario",
-        "mítico":"🔱 Mítico","Mítico":"🔱 Mítico",
-    }
-
-    embed = discord.Embed(
-        title=f"🥇 {rarity_label.get(rarity, rarity)} — Elige una figura",
+async def _give_figure(inter: discord.Interaction, fig_key: str, uid: int, db):
+    """Entrega la figura al usuario y confirma."""
+    db2 = load_db()
+    u2  = get_user(db2, inter.user.id)
+    u2.setdefault("figures",[]).append({"key": fig_key, "level":1, "xp":0})
+    team = u2.get("team",[None,None,None])
+    while len(team) < 3:
+        team.append(None)
+    for i in range(3):
+        if team[i] is None:
+            team[i] = len(u2["figures"]) - 1
+            break
+    u2["team"] = team
+    save_db(db2)
+    fig  = FIGURES.get(fig_key, {})
+    norm = _RARITY_NORM.get(fig.get("rarity","común"),"común")
+    ok   = discord.Embed(
+        title=f"✅ ¡{fig.get('name', fig_key)} obtenida!",
+        description=(
+            f"{fig.get('emoji','')} **{fig.get('name', fig_key)}** añadida a tu colección.\n"
+            f"{_RARITY_EMOJI.get(norm,'⚪')} {norm.capitalize()} · "
+            f"❤️{fig.get('hp','?')} ⚔️{fig.get('attack','?')} "
+            f"🛡️{fig.get('defense','?')} ⚡{fig.get('speed','?')}"
+        ),
         color=0xffd700
     )
-    for key, fig in figs_in_r:
+    if fig.get("image"):
+        ok.set_thumbnail(url=fig["image"])
+    await inter.response.edit_message(embed=ok, view=None)
+
+async def _show_get_select(interaction, rarity: str, by_r: dict, uid: int, db, page: int = 0):
+    """Muestra un Select dropdown con las figuras de la rareza elegida."""
+    figs      = by_r.get(rarity, [])
+    PAGE_SIZE = 25   # máximo de opciones en un Select de Discord
+    total_pages = max(1, (len(figs) + PAGE_SIZE - 1) // PAGE_SIZE)
+    page        = max(0, min(page, total_pages - 1))
+    page_figs   = figs[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
+
+    embed = discord.Embed(
+        title=f"🥇 {_RARITY_EMOJI.get(rarity,'')} {rarity.capitalize()} — Selecciona una figura",
+        description=f"Página {page+1}/{total_pages}  ·  {len(figs)} figuras",
+        color=0xffd700
+    )
+    for key, fig in page_figs:
         embed.add_field(
             name=f"{fig['emoji']} {fig['name']}",
-            value=(f"❤️ {fig.get('hp','?')} ⚔️ {fig.get('attack','?')} "
-                   f"🛡️ {fig.get('defense','?')} ⚡ {fig.get('speed','?')}"),
+            value=f"❤️{fig.get('hp','?')} ⚔️{fig.get('attack','?')} 🛡️{fig.get('defense','?')} ⚡{fig.get('speed','?')}",
             inline=True
         )
 
-    # Botones de selección (máx 25 por Discord, paginamos si hay más)
-    view = discord.ui.View(timeout=180)
-    for key, fig in figs_in_r[:20]:
-        def make_fig_cb(fig_key=key, fig_data=fig):
-            async def cb(inter: discord.Interaction):
+    # Select dropdown
+    options = []
+    for key, fig in page_figs:
+        raw_emoji = fig.get("emoji","")
+        emoji_val = raw_emoji if not raw_emoji.startswith("<") else None
+        options.append(discord.SelectOption(
+            label=fig["name"][:100],
+            value=key,
+            description=f"❤️{fig.get('hp','?')} ⚔️{fig.get('attack','?')} 🛡️{fig.get('defense','?')} ⚡{fig.get('speed','?')}",
+            emoji=emoji_val
+        ))
+
+    view    = discord.ui.View(timeout=180)
+    select  = discord.ui.Select(
+        placeholder=f"🥇 Elige una figura {_RARITY_EMOJI.get(rarity,'')} {rarity.capitalize()}...",
+        options=options,
+        custom_id="get_select",
+        row=0
+    )
+    async def select_cb(inter: discord.Interaction):
+        if inter.user.id != uid:
+            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+            return
+        await _give_figure(inter, inter.data["values"][0], uid, db)
+    select.callback = select_cb
+    view.add_item(select)
+
+    # Paginación si hay más de 25
+    if page > 0:
+        prev_btn = discord.ui.Button(label="◀ Anterior", style=discord.ButtonStyle.secondary, custom_id="get_prev", row=1)
+        def make_prev(p=page):
+            async def cb(inter):
                 if inter.user.id != uid:
                     await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
                     return
-                db2  = load_db()
-                u2   = get_user(db2, inter.user.id)
-                u2.setdefault("figures", []).append({"key": fig_key, "level": 1, "xp": 0})
-                team = u2.get("team", [None, None, None])
-                while len(team) < 3:
-                    team.append(None)
-                for i in range(3):
-                    if team[i] is None:
-                        team[i] = len(u2["figures"]) - 1
-                        break
-                u2["team"] = team
-                save_db(db2)
-                ok = discord.Embed(
-                    title=f"✅ ¡{fig_data['name']} obtenida!",
-                    description=f"{fig_data['emoji']} **{fig_data['name']}** añadida a tu colección.",
-                    color=0xffd700
-                )
-                if fig_data.get("image"):
-                    ok.set_thumbnail(url=fig_data["image"])
-                await inter.response.edit_message(embed=ok, view=None)
+                await _show_get_select(inter, rarity, by_r, uid, db, p - 1)
             return cb
-        btn = discord.ui.Button(
-            label=fig["name"][:20],
-            style=discord.ButtonStyle.success,
-            custom_id=f"get_fig_{key}",
-            emoji=fig["emoji"] if not fig["emoji"].startswith("<") else None
-        )
-        btn.callback = make_fig_cb()
-        view.add_item(btn)
+        prev_btn.callback = make_prev()
+        view.add_item(prev_btn)
+    if page < total_pages - 1:
+        next_btn = discord.ui.Button(label="Siguiente ▶", style=discord.ButtonStyle.secondary, custom_id="get_next", row=1)
+        def make_next(p=page):
+            async def cb(inter):
+                if inter.user.id != uid:
+                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                await _show_get_select(inter, rarity, by_r, uid, db, p + 1)
+            return cb
+        next_btn.callback = make_next()
+        view.add_item(next_btn)
 
-    # Botón volver
-    back_btn = discord.ui.Button(label="◀ Volver", style=discord.ButtonStyle.secondary, custom_id="get_back")
+    # Volver a rarezas
+    back_btn = discord.ui.Button(label="◀ Rarezas", style=discord.ButtonStyle.secondary, custom_id="get_back", row=1)
     async def back_cb(inter: discord.Interaction):
         if inter.user.id != uid:
             await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
@@ -10038,8 +11570,260 @@ async def _show_get_figures(interaction: discord.Interaction, rarity: str, by_ra
     await interaction.response.edit_message(embed=embed, view=view)
 
 
+
+# ============================================================
+#  CADENA DEL JEFE SECRETO SUPREMO
+# ============================================================
+
+# ── FRASQUITO DE GLITCH ────────────────────────────────────
+# Objeto especial obtenido derrotando a Glitch 10 veces (logro)
+# Se almacena en user["items"]["glitch_vial"] = {count, cooldown_turn}
+
+# ── FIGURAS DEL JEFE FINAL ─────────────────────────────────
+FIGURES["el_muneco"] = {
+    "name": "EL MUÑECO",
+    "emoji": "🗣️",
+    "rarity": "mítico",
+    "price": 0,
+    "hp": 1000,
+    "attack": 92,   # promedio de 80-105
+    "defense": 98,
+    "speed": 102,
+    "image": "",
+    "passive": "rechazo_eterno",
+}
+
+FIGURES["el_espectro"] = {
+    "name": "EL ESPECTRO",
+    "emoji": "🐱‍👤",
+    "rarity": "mítico",
+    "price": 0,
+    "hp": 1000,
+    "attack": 97,   # promedio de 75-120
+    "defense": 96,
+    "speed": 105,
+    "image": "",
+}
+
+# ── BLACK IMPOSTOR DEFEAT 💀 ────────────────────────────────
+FIGURES["black_impostor_defeat"] = {
+    "name": "BLACK IMPOSTOR 💀",
+    "emoji": "🔪",
+    "rarity": "mítico",
+    "price": 0,
+    "hp": 500,
+    "attack": 32,
+    "defense": 40,
+    "speed": 41,
+    "image": "https://dthezntil550i.cloudfront.net/fs/latest/fs2309010928400340024226439/1280_960/ad0ab693-75e0-4dcf-9873-1b53dadf28c0.png",
+}
+
+FIGURE_SKILLS["el_muneco"] = [
+    {
+        "name": "Ultra Attack",
+        "cost": 30,
+        "type": "ultra_attack",
+        "power": 105,
+        "charge_turns": 2,
+        "desc": "Se potencia 2 turnos y luego golpea. 105 daño base.",
+    },
+    {
+        "name": "Golden Power",
+        "cost": 60,
+        "type": "aoe_damage",
+        "power": 50,
+        "desc": "50 daño a TODOS los enemigos.",
+    },
+    {
+        "name": "Regeneración Pura",
+        "cost": 100,
+        "type": "muneco_regen",
+        "power": 0,
+        "charge_turns": 5,
+        "desc": "Carga 5 turnos y luego cura toda su vida.",
+    },
+]
+
+FIGURE_SKILLS["el_espectro"] = [
+    {
+        "name": "Kidnapping",
+        "cost": 30,
+        "type": "kidnapping",
+        "power": 15,
+        "desc": '"Let me take you to my world..." — Agarra a un oponente, 15 daño/turno. Minijuego para escapar.',
+    },
+    {
+        "name": "Evil Laugh",
+        "cost": 60,
+        "type": "heal_team_self",
+        "power": 40,
+        "team_heal_power": 30,
+        "desc": '"IM SPECTRE AND IM EVIL!" — Cura 40 HP al Espectro y 30 a sus aliados.',
+    },
+    {
+        "name": "The power within me...",
+        "cost": 100,
+        "type": "spectro_vanish",
+        "power": 30,
+        "desc": '"NOW YOURE GETTING INTO MY SHOW!" — El Espectro y otra figura desaparecen. Las otras 2 figuras restantes reciben 30 daño.',
+    },
+]
+
+FIGURE_SKILLS["black_impostor_defeat"] = [
+    {
+        "name": "SPRINT UP",
+        "cost": 30,
+        "type": "sprint_up",
+        "power": 20,
+        "dot_turns": 4,
+        "charges_needed": 3,
+        "desc": '"IM GOING TO CATCH YOU!" — Úsala 3 veces para activar: 20 daño/turno x4.',
+    },
+    {
+        "name": "IM RIGHT BEHIND YOU...",
+        "cost": 60,
+        "type": "right_behind_you",
+        "power": 50,
+        "immune_turns": 3,
+        "break_damage": 80,
+        "stun_on_break": 2,
+        "desc": '"Theres no escape..." — Inmune 3T. Si le haces 80 daño: Black stuneado 2T. Si no: 50 daño + stun 1T.',
+    },
+    {
+        "name": "SPEED UP SLASH",
+        "cost": 100,
+        "type": "speed_up_slash",
+        "power": 0,
+        "warning_turns": 1,
+        "desc": '"You arent escaping this time..." — INSTAKILL. Avisa 1 turno antes. Sobrevivible con Frasquito de Glitch.',
+    },
+]
+
+# ── EQUIPO DEL JEFE FINAL ─────────────────────────────────
+# El jefe secreto usa: EL MUÑECO + EL ESPECTRO + Toby Fox
+SECRET_FINAL_BOSS = {
+    "id": "el_muneco_secreto",
+    "name": "👑 EL MUÑECO 🗣️",
+    "desc": "El jefe final secreto. ¿Estás seguro de que quieres hacer esto?",
+    "difficulty": 10,
+    "team": ["el_muneco", "el_espectro", "toby_fox"],
+    "level": 50,
+    "hp_mult": 1.0,
+    "atk_mult": 1.0,
+    "energy_bonus": 0,
+    "reward_coins": 99999,
+    "reward_xp": 9999,
+    "unlock_requirement": "vencedor_batalla",  # Logro requerido
+}
+
+DEFEAT_BOSS = {
+    "id": "defeat_impostor",
+    "name": "💀 DEFEAT",
+    "desc": "Una versión más fuerte del Black Impostor. Desbloqueada al derrotar a todos los impostores.",
+    "difficulty": 9,
+    "team": ["black_impostor_defeat"],
+    "level": 40,
+    "hp_mult": 1.0,
+    "atk_mult": 1.0,
+    "energy_bonus": 20,
+    "reward_coins": 5000,
+    "reward_xp": 800,
+    "unlock_requirement": "vencedor_batalla",
+}
+
+# ── LOGROS SECRETOS ──────────────────────────────────────────────────────────
+# (Se registran en el sistema de logros existente)
+LOGRO_GLITCH_10 = {
+    "id": "glitch_10_wins",
+    "secret": True,
+    "name": "😈 Esto solo es el comienzo...",
+    "desc": "Derrota a Glitch 10 veces.",
+    "reward_coins": 200,
+    "reward_item": "glitch_vial",
+}
+
+LOGRO_VENCEDOR_BATALLA = {
+    "id": "vencedor_batalla",
+    "secret": True,
+    "name": "🦝 Vencedor de la Batalla!",
+    "desc": "¡Derrota a todos los impostores!",
+    "reward_item": "defeat_unlock",  # Desbloquea DEFEAT 💀
+}
+
+# ── HANDLERS DE HABILIDADES DE EL MUÑECO Y EL ESPECTRO ───────────────────────
+# Se añaden al procesador de stype más abajo
+
 # ============================================================
 #  ARRANQUE
 # ============================================================
 bot.run(TOKEN)
+
+
+# ============================================================
+#  OG LIGHT Y OG FIRE — Habilidades
+# ============================================================
+
+FIGURE_SKILLS["og_light"] = [
+    {
+        "name": "Passion for Science",
+        "cost": 30,
+        "type": "passion_science",
+        "power": 20,
+        "atk_buff": 10,
+        "desc": "20 HP a todo el equipo y +10 ATK a Light.",
+    },
+    {
+        "name": "Drones.V4",
+        "cost": 60,
+        "type": "drones_v4",
+        "power": 0,
+        "drone_count": 4,
+        "drone_dmg_min": 3,
+        "drone_dmg_max": 5,
+        "drone_turns": 5,
+        "explode_chance": 15,
+        "explode_dmg": 30,
+        "explode_dot_turns": 3,
+        "desc": "4 drones hacen 3-5 daño/turno x5. 15% de que cada uno explote: 30 daño + burning 3T.",
+    },
+    {
+        "name": "The Ice Age",
+        "cost": 100,
+        "type": "ice_age",
+        "power": 150,
+        "aoe_power": 80,
+        "charge_turns": 6,
+        "frozen_turns": 2,
+        "desc": "Carga 6 turnos. Light no puede actuar. Luego: 150 al activo, 80 a los demás, frozen 2T.",
+    },
+]
+
+FIGURE_SKILLS["og_fire"] = [
+    {
+        "name": "The Trauma...",
+        "cost": 30,
+        "type": "the_trauma",
+        "power": 0,
+        "desc": "1 debuff random a Fire Y a la figura actual del oponente.",
+    },
+    {
+        "name": "BurnOut",
+        "cost": 60,
+        "type": "burnout_fire",
+        "power": 25,
+        "aoe_power": 15,
+        "dot_turns": 3,
+        "dot_power": 5,
+        "desc": "25 daño al activo, 15 a las otras 2, burning 3T a todos.",
+    },
+    {
+        "name": "Phoenix-Like",
+        "cost": 100,
+        "type": "phoenix_like",
+        "power": 20,
+        "dot_turns": 4,
+        "dot_power": 5,
+        "desc": "Fire y una figura aliada al azar mueren. Las otras 2 aliadas reciben 20 daño + burning 4T.",
+    },
+]
 
