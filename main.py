@@ -470,28 +470,6 @@ FIGURES = {
         "image": "https://i.postimg.cc/y8zY3Hyg/Normal.png",
         "passive": "og_gamer_phases",
     },
-    "og_light": {
-        "name": "ＯＧ　ＬＩＧＨＴ",
-        "emoji": "🧊",
-        "rarity": "Mítico",
-        "price": 0,
-        "hp": 230,
-        "attack": 28,
-        "defense": 42,
-        "speed": 32,
-        "image": "https://i.postimg.cc/25YF7rM7/Parpadeo-L.gif",
-    },
-    "og_fire": {
-        "name": "ＯＧ　ＦＩＲＥ",
-        "emoji": "🔥",
-        "rarity": "Mítico",
-        "price": 0,
-        "hp": 228,
-        "attack": 30,
-        "defense": 35,
-        "speed": 34,
-        "image": "https://i.postimg.cc/d09X8WHL/Fire.png",
-    },
     "holy_cow": {
         "name": "Holy Cow",
         "emoji": "🐄",
@@ -1902,88 +1880,6 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
 
     # ── TICK: Efectos especiales de los Impostores FNF ────────────────────────
 
-    # ── DRONES.V4 (OG Light): procesar daño y explosiones cada turno ───────────
-    for fig in battle.p1_team + battle.p2_team:
-        if fig.get("drones") and fig["hp"] > 0:
-            drones = fig["drones"]
-            if drones["turns"] > 0:
-                # Aplicar daño al oponente activo
-                opp_team = battle.p2_team if fig in battle.p1_team else battle.p1_team
-                opp_active_idx = getattr(battle, "p2_active" if fig in battle.p1_team else "p1_active")
-                target = opp_team[opp_active_idx] if opp_active_idx < len(opp_team) else None
-                if target and target["hp"] > 0:
-                    exploded = False
-                    total_dmg = 0
-                    active_drones = drones["count"]
-                    for d in range(active_drones):
-                        if random.randint(1, 100) <= drones["explode_chance"]:
-                            # ¡Explosión!
-                            explode_dmg = drones["explode_dmg"]
-                            target["hp"] = max(0, target["hp"] - explode_dmg)
-                            target.setdefault("dots", []).append({"dmg": 6, "turns": drones["explode_dot"]})
-                            battle.log.append(f"💥 ¡Un drone de **ＯＧ　ＬＩＧＨＴ** explota! {explode_dmg} daño + burning!")
-                            battle.log.append(f'   🧊 "Eh... Eso no debía pasar... Lo siento!"')
-                            drones["count"] = max(0, drones["count"] - 1)
-                            exploded = True
-                            break
-                    if not exploded:
-                        dmg_per_drone = random.randint(drones["dmg_min"], drones["dmg_max"])
-                        total_dmg = dmg_per_drone * drones["count"]
-                        target["hp"] = max(0, target["hp"] - total_dmg)
-                        battle.log.append(f"🤖 Los drones de **ＯＧ　ＬＩＧＨＴ** atacan: -{total_dmg} HP ({drones['count']} activos)")
-                drones["turns"] -= 1
-                if drones["turns"] <= 0 or drones["count"] <= 0:
-                    fig.pop("drones", None)
-                    battle.log.append(f"🤖 Los drones de **ＯＧ　ＬＩＧＨＴ** se apagan.")
-
-    # ── RECHAZO ETERNO (El Muñeco): buff a baja vida + regeneración cada 20 turnos ──
-    if not hasattr(battle, "muneco_turn_counter"):
-        battle.muneco_turn_counter = 0
-    battle.muneco_turn_counter += 1
-    for fig in battle.p1_team + battle.p2_team:
-        if fig.get("key") == "el_muneco" and fig["hp"] > 0:
-            max_hp = fig.get("max_hp", 1000)
-            # Buff a baja vida (< 30%)
-            if fig["hp"] < max_hp * 0.30 and not fig.get("rechazo_eterno_buff"):
-                fig["rechazo_eterno_buff"] = True
-                fig["atk"] = fig.get("atk", 92) + 30
-                fig["defense"] = fig.get("defense", 98) + 30
-                battle.log.append(f"🗣️ **EL MUÑECO** activa **Rechazo Eterno**... +30 ATK +30 DEF!")
-            # Regeneración cada 20 turnos
-            if battle.muneco_turn_counter % 20 == 0:
-                fig["hp"] = max_hp
-                battle.log.append(f"🗣️ ¡**EL MUÑECO** se cura completamente! ({20} turnos cumplidos)")
-                battle.log.append(f"   ⚠️ Contador reiniciado. Siguiente curación en **20 turnos**.")
-
-    # ── KIDNAP DoT (El Espectro) ────────────────────────────────────────────
-    for fig in battle.p1_team + battle.p2_team:
-        if fig.get("kidnapped") and fig["hp"] > 0:
-            kdmg = fig.get("kidnap_dmg", 15)
-            fig["hp"] = max(0, fig["hp"] - kdmg)
-            battle.log.append(f"👋 **{fig['emoji']} {fig['name']}** sigue secuestrado... -{kdmg} HP!")
-            # Minijuego de escape: ofrecer botón al jugador
-            uid = battle.p1 if fig in battle.p1_team else battle.p2
-            if uid != 0:
-                view_esc = discord.ui.View(timeout=8)
-                esc_btn = discord.ui.Button(label="🏃 ¡ESCAPAR! (50%)", style=discord.ButtonStyle.danger)
-                async def kidnap_esc_cb(ei: discord.Interaction, f=fig):
-                    if ei.user.id != uid:
-                        await ei.response.send_message("❌ No es tu turno.", ephemeral=True)
-                        return
-                    if random.randint(1,100) <= 50:
-                        f.pop("kidnapped", None)
-                        f.pop("kidnap_dmg", None)
-                        battle.log.append(f"💨 **{f['emoji']} {f['name']}** logra escapar del secuestro!")
-                    else:
-                        battle.log.append(f"😫 **{f['emoji']}** no logra escapar...")
-                    await finish_turn(ei, battle, channel_id)
-                esc_btn.callback = kidnap_esc_cb
-                view_esc.add_item(esc_btn)
-                try:
-                    await interaction.followup.send("⚡ ¡Intenta escapar del secuestro!", view=view_esc, ephemeral=True)
-                except Exception:
-                    pass
-
     # Ejected queue — cuenta atrás para el retorno de Green/Maroon
     if hasattr(battle, "ejected_queue") and battle.ejected_queue:
         still_pending = []
@@ -2002,19 +1898,12 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                         orig_fig  = FIGURES[sf]
                         new_entry = make_fighter(sf, {"level":1,"xp":0,"stat_ups":{}})
                         team[idx] = new_entry
-                        # Reactivar esa figura — buscar cualquier slot libre
+                        # Reactivar esa figura si el equipo no tiene activo
                         idx_attr = "p1_active" if eq["attacker_team"] == "p1" else "p2_active"
-                        cur_active = getattr(battle, idx_attr)
-                        if cur_active >= len(team) or team[cur_active]["hp"] <= 0:
-                            for i, f in enumerate(team):
-                                if f["hp"] > 0:
-                                    setattr(battle, idx_attr, i)
-                                    break
-                        battle.log.append(f"🚀 ¡**{orig_fig['name']}** VUELVE del espacio... y está TRANSFORMADO!")
-                    # NO añadir a still_pending — ya procesado
-                else:
-                    battle.log.append(f"💫 Los expulsados no vuelven — la batalla ya terminó.")
-                # En ambos casos, no se re-añade a still_pending (se descarta)
+                        if team[getattr(battle, idx_attr)]["hp"] <= 0:
+                            setattr(battle, idx_attr, idx)
+                        battle.log.append(f"🚀 **{orig_fig['name']}** VUELVE... ¡y está TRANSFORMADO!")
+                # Si no quedan vivos, no vuelve (ya ganaste)
             else:
                 still_pending.append(eq)
                 if eq["turns_left"] <= 5:
@@ -3482,239 +3371,6 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 battle.log.append(f"   {' · '.join(hit)}")
             battle.log.append(f"   ☠️ Burning {dot_dmg}/turno por {dot_t} turnos!")
 
-        # ── EL MUÑECO / EL ESPECTRO / BLACK IMPOSTOR DEFEAT ─────────
-
-        elif stype == "ultra_attack":
-            charges = attacker.get("ultra_attack_charges", 0) + 1
-            attacker["ultra_attack_charges"] = charges
-            needed = skill.get("charge_turns", 2)
-            if charges < needed:
-                attacker["ultra_attack_buffed"] = True
-                battle.log.append(f"🗣️ **{attacker['name']}** se potencia... ({charges}/{needed}) ¡Se acerca algo enorme!")
-            else:
-                attacker["ultra_attack_charges"] = 0
-                base = skill.get("power", 105)
-                dmg = battle.calc_damage(attacker["atk"], defender["defense"], base)
-                defender["hp"] = max(0, defender["hp"] - dmg)
-                battle.log.append(f"🗣️ **{attacker['name']}** lanza su **Ultra Attack**! → **{dmg}** daño!")
-
-        elif stype == "muneco_regen":
-            charges = attacker.get("regen_charges", 0) + 1
-            attacker["regen_charges"] = charges
-            needed = skill.get("charge_turns", 5)
-            if charges < needed:
-                battle.log.append(f"🗣️ **{attacker['name']}** carga su regeneración... ({charges}/{needed})")
-            else:
-                attacker["regen_charges"] = 0
-                full_hp = attacker.get("max_hp", 1000)
-                attacker["hp"] = full_hp
-                battle.log.append(f"🗣️ ¡**{attacker['name']}** se regenera completamente! → {full_hp} HP!")
-
-        elif stype == "kidnapping":
-            dmg_per_turn = skill.get("power", 15)
-            # Elegir oponente random
-            alive = [f for f in def_team if f["hp"] > 0]
-            if alive:
-                victim = random.choice(alive)
-                victim["kidnapped"] = True
-                victim["kidnap_dmg"] = dmg_per_turn
-                victim["kidnap_turns"] = 999  # Hasta que escape
-                battle.log.append(f"🐱\u200d👤 **{attacker['name']}**: _Let me take you to my world..._")
-                battle.log.append(f"   👋 ¡**{victim['emoji']} {victim['name']}** ha sido secuestrado! -{dmg_per_turn} HP/turno")
-                battle.log.append(f"   ⚡ ¡El usuario puede intentar escapar con el minijuego!")
-
-        elif stype == "spectro_vanish":
-            splash = skill.get("power", 30)
-            atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
-            alive_allies = [f for f in atk_team if f["hp"] > 0 and f is not attacker]
-            alive_enemies = [f for f in def_team if f["hp"] > 0]
-            # Elegir aliado y enemigo para desaparecer
-            if alive_allies and alive_enemies:
-                partner = random.choice(alive_allies)
-                victim = random.choice(alive_enemies)
-                attacker["hp"] = 0
-                partner["hp"] = 0
-                victim["hp"] = 0
-                # Daño splash a figuras restantes
-                for fig in def_team:
-                    if fig is not victim and fig["hp"] > 0:
-                        fig["hp"] = max(0, fig["hp"] - splash)
-                battle.log.append(f"🐱‍👤 **{attacker['name']}**: _NOW YOURE GETTING INTO MY SHOW!_")
-                battle.log.append(f"   💨 **{attacker['name']}** y **{partner['emoji']} {partner['name']}** desaparecen!")
-                battle.log.append(f"   💨 **{victim['emoji']} {victim['name']}** también desaparece!")
-                battle.log.append(f"   💥 Las figuras restantes reciben {splash} daño!")
-
-        elif stype == "sprint_up":
-            charges = attacker.get("sprint_charges", 0) + 1
-            attacker["sprint_charges"] = charges
-            needed = skill.get("charges_needed", 3)
-            if charges < needed:
-                battle.log.append(f"🔪 **{attacker['name']}**: _IM GOING TO CATCH YOU!_ ({charges}/{needed})")
-            else:
-                attacker["sprint_charges"] = 0
-                dot_dmg = skill.get("power", 20)
-                dot_t   = skill.get("dot_turns", 4)
-                defender.setdefault("dots", []).append({"dmg": dot_dmg, "turns": dot_t})
-                battle.log.append(f"🔪 **{attacker['name']}** ¡ATACA! → {dot_dmg} daño/turno x{dot_t}!")
-
-        elif stype == "right_behind_you":
-            immune_t = skill.get("immune_turns", 3)
-            attacker["immune_turns"] = immune_t
-            attacker["right_behind_shield"] = skill.get("break_damage", 80)
-            attacker["right_behind_stun"] = skill.get("stun_on_break", 2)
-            attacker["right_behind_punish"] = skill.get("power", 50)
-            battle.log.append(f"🔪 **{attacker['name']}**: _Theres no escape..._")
-            battle.log.append(f"   🛡️ Inmune al daño por {immune_t} turnos.")
-            battle.log.append(f"   ⚡ Si le haces {skill.get('break_damage',80)} daño: stun {skill.get('stun_on_break',2)}T. Si no: {skill.get('power',50)} daño + stun 1T.")
-
-        elif stype == "speed_up_slash":
-            # Verificar si el jugador tiene el frasquito de glitch
-            if attacker.get("speed_slash_warning"):
-                # Ya advirtió el turno anterior — ejecutar instakill
-                attacker.pop("speed_slash_warning", None)
-                uid = battle.p1 if battle.turn == 2 else battle.p2
-                # Revisar si el jugador tiene Frasquito de Glitch activo
-                glitch_active = defender.get("glitch_vial_active", False)
-                if glitch_active:
-                    defender.pop("glitch_vial_active", None)
-                    defender["glitch_vial_cooldown"] = 5
-                    battle.log.append(f"🔪 **{attacker['name']}**: _You arent escaping this time..._")
-                    battle.log.append(f"   ✨ ¡**{defender['emoji']}** usó el Frasquito de Glitch! ¡El ataque falla!")
-                else:
-                    battle.log.append(f"🔪 **{attacker['name']}**: _You arent escaping this time..._")
-                    battle.log.append(f"   ⚡💀 **SPEED UP SLASH** — ¡INSTAKILL!")
-                    defender["hp"] = 0
-            else:
-                # Primera vez: advertir
-                attacker["speed_slash_warning"] = True
-                battle.log.append(f"⚠️ **{attacker['name']}** está preparando algo terrible...")
-                battle.log.append(f"   🔪 _¡El próximo turno usará **SPEED UP SLASH**! ¡Prepárate!_")
-                battle.log.append(f"   💊 Si tienes un **Frasquito de Glitch**, úsalo ahora.")
-
-        # ── OG LIGHT ─────────────────────────────────────────────────
-
-        elif stype == "passion_science":
-            heal = skill.get("power", 20)
-            atk_buff = skill.get("atk_buff", 10)
-            atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
-            for ally in atk_team:
-                if ally["hp"] > 0:
-                    ally["hp"] = min(ally.get("max_hp", ally["hp"] + heal), ally["hp"] + heal)
-            attacker["atk"] = attacker.get("atk", 28) + atk_buff
-            battle.log.append(f"🧊 **ＯＧ　ＬＩＧＨＴ** trabaja apasionadamente! +{heal} HP al equipo, +{atk_buff} ATK!")
-
-        elif stype == "drones_v4":
-            drone_count = skill.get("drone_count", 4)
-            dmg_min = skill.get("drone_dmg_min", 3)
-            dmg_max = skill.get("drone_dmg_max", 5)
-            turns = skill.get("drone_turns", 5)
-            explode_chance = skill.get("explode_chance", 15)
-            explode_dmg = skill.get("explode_dmg", 30)
-            explode_dot = skill.get("explode_dot_turns", 3)
-            # Inicializar drones en el estado de la figura
-            attacker["drones"] = {
-                "count": drone_count,
-                "dmg_min": dmg_min,
-                "dmg_max": dmg_max,
-                "turns": turns,
-                "explode_chance": explode_chance,
-                "explode_dmg": explode_dmg,
-                "explode_dot": explode_dot,
-            }
-            battle.log.append(f"🧊 **ＯＧ　ＬＩＧＨＴ** despliega {drone_count} drones! Que... espera, ¿eso no debia pasar asi?")
-            battle.log.append(f"   🤖 Los drones harán {dmg_min}-{dmg_max} daño/turno x{turns}. Cada uno: {explode_chance}% de explotar...")
-
-        elif stype == "ice_age":
-            # Verificar si ya está cargando
-            charges = attacker.get("ice_age_charges", 0) + 1
-            attacker["ice_age_charges"] = charges
-            needed = skill.get("charge_turns", 6)
-            messages = {
-                1: "Light no hace nada... que raro...",
-                2: "Light empieza a ser rodeado por hielo...",
-                3: "Parece que Light sigue concentrándose en algo?",
-                4: "... Oh dios no...",
-                5: "ES MUY TARDE!! NO HAY ESCAPE!! EL HIELO CONSUMIRA A TODOS!",
-                6: "Light lanza un ataque de Hielo Superpotente... Te lo adverti!",
-            }
-            if charges < needed:
-                attacker["cant_attack_turns"] = 2  # No puede atacar ni defenderse
-                attacker["ice_age_charging"] = True
-                msg = messages.get(charges, "...")
-                battle.log.append(f"🧊 **ＯＧ　ＬＩＧＨＴ**: _{msg}_ ({charges}/{needed})")
-            else:
-                attacker["ice_age_charges"] = 0
-                attacker.pop("ice_age_charging", None)
-                # Ejecutar el ataque
-                main_dmg = skill.get("power", 150)
-                aoe_dmg = skill.get("aoe_power", 80)
-                frozen_t = skill.get("frozen_turns", 2)
-                def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
-                def_active_idx = getattr(battle, "p2_active" if battle.turn == 1 else "p1_active")
-                battle.log.append(f"🧊❄️ **ＯＧ　ＬＩＧＨＴ**: _{messages[6]}_")
-                for i, fig in enumerate(def_team):
-                    if fig["hp"] > 0:
-                        dmg = battle.calc_damage(attacker["atk"], fig["defense"], main_dmg if i == def_active_idx else aoe_dmg)
-                        fig["hp"] = max(0, fig["hp"] - dmg)
-                        fig["stun_turns"] = frozen_t
-                        fig.setdefault("dots", []).append({"dmg": 8, "turns": frozen_t})
-                        battle.log.append(f"   ❄️ {fig['emoji']} {fig['name']}: -{dmg} HP + Frozen {frozen_t}T!")
-
-        # ── OG FIRE ──────────────────────────────────────────────────
-
-        elif stype == "the_trauma":
-            import random as _r
-            debuffs = [
-                ("atk_debuff",   lambda f: f.update({"atk": max(0, f.get("atk",0) - 8)}),   "-8 ATK"),
-                ("def_debuff",   lambda f: f.update({"defense": max(0, f.get("defense",0) - 8)}), "-8 DEF"),
-                ("speed_debuff", lambda f: f.update({"speed": max(0, f.get("speed",0) - 8)}), "-8 VEL"),
-                ("stun",         lambda f: f.update({"stun_turns": 1}),                       "Stun 1T"),
-                ("dot",          lambda f: f.setdefault("dots",[]).append({"dmg":8,"turns":3}), "Burning 8/T x3"),
-                ("energy_drain", lambda f: f.update({"energy": max(0, f.get("energy",0) - 30)}), "-30 Energía"),
-            ]
-            chosen_self = _r.choice(debuffs)
-            chosen_opp  = _r.choice(debuffs)
-            chosen_self[1](attacker)
-            chosen_opp[1](defender)
-            battle.log.append(f"🔥 **ＯＧ　ＦＩＲＥ** recuerda el laboratorio... los traumas vuelven...")
-            battle.log.append(f"   😰 Fire recibe: **{chosen_self[2]}**")
-            battle.log.append(f"   💢 {defender['emoji']} {defender['name']} recibe: **{chosen_opp[2]}**")
-
-        elif stype == "burnout_fire":
-            main_dmg = skill.get("power", 25)
-            aoe_dmg = skill.get("aoe_power", 15)
-            dot_t = skill.get("dot_turns", 3)
-            dot_p = skill.get("dot_power", 5)
-            def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
-            def_active_idx = getattr(battle, "p2_active" if battle.turn == 1 else "p1_active")
-            battle.log.append(f"🔥 **ＯＧ　ＦＩＲＥ** descarga todo el estrés en un ataque!")
-            for i, fig in enumerate(def_team):
-                if fig["hp"] > 0:
-                    dmg = battle.calc_damage(attacker["atk"], fig["defense"], main_dmg if i == def_active_idx else aoe_dmg)
-                    fig["hp"] = max(0, fig["hp"] - dmg)
-                    fig.setdefault("dots", []).append({"dmg": dot_p, "turns": dot_t})
-                    battle.log.append(f"   🔥 {fig['emoji']} {fig['name']}: -{dmg} HP + burning {dot_p}/T x{dot_t}!")
-
-        elif stype == "phoenix_like":
-            splash = skill.get("power", 20)
-            dot_t = skill.get("dot_turns", 4)
-            dot_p = skill.get("dot_power", 5)
-            atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
-            # Elegir aliado aleatorio para morir junto a Fire
-            alive_allies = [f for f in atk_team if f["hp"] > 0 and f is not attacker]
-            battle.log.append(f"🔥 **ＯＧ　ＦＩＲＥ**: _...Ya perdí la mayoría... probablemente pueda hacer algo..._")
-            if alive_allies:
-                victim = random.choice(alive_allies)
-                victim["hp"] = 0
-                battle.log.append(f"   💀 **{victim['emoji']} {victim['name']}** y **ＯＧ　ＦＩＲＥ** desaparecen en llamas...")
-            attacker["hp"] = 0
-            # Daño + burning a los aliados restantes
-            for ally in atk_team:
-                if ally["hp"] > 0 and ally is not attacker:
-                    ally["hp"] = max(0, ally["hp"] - splash)
-                    ally.setdefault("dots", []).append({"dmg": dot_p, "turns": dot_t})
-                    battle.log.append(f"   🔥 {ally['emoji']} {ally['name']} -{splash} HP + burning {dot_p}/T x{dot_t}!")
-
         # ── SANS ─────────────────────────────────────────────────────
 
         elif stype == "bone_barrier":
@@ -4270,46 +3926,6 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             battle.turn = 2 if battle.turn == 1 else 1
             await finish_turn(interaction, battle, channel_id)
             return
-
-        # Pasiva green_new_form: Green Impostor muere y vuelve en forma 2 tras 3 turnos
-        if defender.get("passive") == "green_new_form" and not defender.get("ejected"):
-            defender["ejected"] = True  # Marcar para no activar dos veces
-            sf = defender.get("key","") + "2"
-            if sf in FIGURES:
-                def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
-                idx = def_team.index(defender) if defender in def_team else -1
-                if idx >= 0:
-                    team_key = "p2" if battle.turn == 1 else "p1"
-                    battle.ejected_queue = getattr(battle, "ejected_queue", [])
-                    battle.ejected_queue.append({
-                        "attacker_key": defender.get("key"),
-                        "attacker_team": team_key,
-                        "attacker_idx": idx,
-                        "second_form": sf,
-                        "turns_left": 3,
-                    })
-                    battle.log.append(f"🟢 **{defender['name']}** fue derrotado... pero algo no cuadra.")
-                    battle.log.append(f"   ⏳ Volverá en **3 turnos** en su forma definitiva...")
-
-        # Pasiva maroon_lol_you_thought: igual que green
-        elif defender.get("passive") == "maroon_lol_you_thought" and not defender.get("ejected"):
-            defender["ejected"] = True
-            sf = defender.get("key","") + "2"
-            if sf in FIGURES:
-                def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
-                idx = def_team.index(defender) if defender in def_team else -1
-                if idx >= 0:
-                    team_key = "p2" if battle.turn == 1 else "p1"
-                    battle.ejected_queue = getattr(battle, "ejected_queue", [])
-                    battle.ejected_queue.append({
-                        "attacker_key": defender.get("key"),
-                        "attacker_team": team_key,
-                        "attacker_idx": idx,
-                        "second_form": sf,
-                        "turns_left": 3,
-                    })
-                    battle.log.append(f"🟤 **{defender['name']}** fue derrotado... ¿o eso crees?")
-                    battle.log.append(f"   ⏳ Volverá en **3 turnos** en su forma definitiva...")
 
         # Pasiva de OG GAMER 64: cambio de fase al morir (1→2→3→4→muerte definitiva)
         if defender.get("key") == "og_gamer64":
@@ -5581,7 +5197,7 @@ BOT_ROSTER = [
     },
     {
         "id": "impostor_negro",
-        "name": "🔪 VS IMPOSTOR! 🔪",
+        "name": "🔪 BLACK IMPOSTOR",
         "desc": "7 impostores. Tú y 3 figuras. ¿Puedes con todos?",
         "difficulty": 8,
         "team": ["boss_impostor_red","boss_impostor_green","boss_impostor_white",
@@ -11447,7 +11063,7 @@ async def get_cmd(interaction: discord.Interaction):
                 await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
                 return
             chosen_rarity = inter.data["values"][0]
-            await _show_get_select(inter, chosen_rarity, by_r, uid, db, page=0)
+            await _show_get_select(inter, chosen_rarity, by_r, uid, db, page=0, user=user)
         select.callback = rarity_select_cb
         view.add_item(select)
         return view
@@ -11486,8 +11102,11 @@ async def _give_figure(inter: discord.Interaction, fig_key: str, uid: int, db):
         ok.set_thumbnail(url=fig["image"])
     await inter.response.edit_message(embed=ok, view=None)
 
-async def _show_get_select(interaction, rarity: str, by_r: dict, uid: int, db, page: int = 0):
+async def _show_get_select(interaction, rarity: str, by_r: dict, uid: int, db, page: int = 0, user: dict = None):
     """Muestra un Select dropdown con las figuras de la rareza elegida."""
+    if user is None:
+        db2 = load_db()
+        user = get_user(db2, uid) or {}
     figs      = by_r.get(rarity, [])
     PAGE_SIZE = 25   # máximo de opciones en un Select de Discord
     total_pages = max(1, (len(figs) + PAGE_SIZE - 1) // PAGE_SIZE)
@@ -11510,9 +11129,24 @@ async def _show_get_select(interaction, rarity: str, by_r: dict, uid: int, db, p
     options = []
     for key, fig in page_figs:
         raw_emoji = fig.get("emoji","")
-        emoji_val = raw_emoji if not raw_emoji.startswith("<") else None
+        # Discord SelectOption acepta: emoji unicode, PartialEmoji o None
+        # Los custom emojis (<:name:id> o <a:name:id>) hay que parsearlos
+        emoji_val = None
+        if raw_emoji and not raw_emoji.startswith("<"):
+            emoji_val = raw_emoji  # emoji unicode normal
+        elif raw_emoji.startswith("<"):
+            # Parsear custom emoji: <a:name:id> o <:name:id>
+            import re as _re
+            m = _re.match(r"<(a?):([^:]+):(\d+)>", raw_emoji)
+            if m:
+                animated = m.group(1) == "a"
+                ename = m.group(2)
+                eid   = int(m.group(3))
+                emoji_val = discord.PartialEmoji(name=ename, id=eid, animated=animated)
+        owned = any(f["key"] == key for f in user.get("figures", []))
+        label = f"{'✅ ' if owned else ''}{fig['name']}"[:100]
         options.append(discord.SelectOption(
-            label=fig["name"][:100],
+            label=label,
             value=key,
             description=f"❤️{fig.get('hp','?')} ⚔️{fig.get('attack','?')} 🛡️{fig.get('defense','?')} ⚡{fig.get('speed','?')}",
             emoji=emoji_val
@@ -11563,267 +11197,53 @@ async def _show_get_select(interaction, rarity: str, by_r: dict, uid: int, db, p
         if inter.user.id != uid:
             await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
             return
-        await get_cmd.callback(inter)
+        # Reconstruir el menú principal de rarezas
+        db3   = load_db()
+        user3 = get_user(db3, inter.user.id)
+        by_r3 = _get_all_by_rarity()
+        embed3 = discord.Embed(
+            title="🥇 PASE DORADO — /get",
+            description="Elige una rareza y luego selecciona la figura del menú desplegable.",
+            color=0xffd700
+        )
+        for r in _RARITY_ORDER:
+            figs3 = by_r3[r]
+            if not figs3:
+                continue
+            preview3 = " · ".join(f"{f['emoji']} {f['name']}" for _, f in figs3[:8])
+            if len(figs3) > 8:
+                preview3 += f" *(+{len(figs3)-8} más)*"
+            embed3.add_field(
+                name=f"{_RARITY_EMOJI[r]} {r.capitalize()} ({len(figs3)})",
+                value=preview3, inline=False
+            )
+        opts3 = []
+        for r in _RARITY_ORDER:
+            if not by_r3[r]:
+                continue
+            opts3.append(discord.SelectOption(
+                label=f"{r.capitalize()} ({len(by_r3[r])} figuras)",
+                value=r,
+                emoji=_RARITY_EMOJI[r],
+            ))
+        sel3 = discord.ui.Select(placeholder="🥇 Elige una rareza...", options=opts3, row=0)
+        async def rarity_cb3(si: discord.Interaction):
+            if si.user.id != uid:
+                await si.response.send_message("❌ No es tu menú.", ephemeral=True)
+                return
+            await _show_get_select(si, si.data["values"][0], by_r3, uid, db3, page=0)
+        sel3.callback = rarity_cb3
+        view3 = discord.ui.View(timeout=180)
+        view3.add_item(sel3)
+        await inter.response.edit_message(embed=embed3, view=view3)
     back_btn.callback = back_cb
     view.add_item(back_btn)
 
     await interaction.response.edit_message(embed=embed, view=view)
 
 
-
-# ============================================================
-#  CADENA DEL JEFE SECRETO SUPREMO
-# ============================================================
-
-# ── FRASQUITO DE GLITCH ────────────────────────────────────
-# Objeto especial obtenido derrotando a Glitch 10 veces (logro)
-# Se almacena en user["items"]["glitch_vial"] = {count, cooldown_turn}
-
-# ── FIGURAS DEL JEFE FINAL ─────────────────────────────────
-FIGURES["el_muneco"] = {
-    "name": "EL MUÑECO",
-    "emoji": "🗣️",
-    "rarity": "mítico",
-    "price": 0,
-    "hp": 1000,
-    "attack": 92,   # promedio de 80-105
-    "defense": 98,
-    "speed": 102,
-    "image": "",
-    "passive": "rechazo_eterno",
-}
-
-FIGURES["el_espectro"] = {
-    "name": "EL ESPECTRO",
-    "emoji": "🐱‍👤",
-    "rarity": "mítico",
-    "price": 0,
-    "hp": 1000,
-    "attack": 97,   # promedio de 75-120
-    "defense": 96,
-    "speed": 105,
-    "image": "",
-}
-
-# ── BLACK IMPOSTOR DEFEAT 💀 ────────────────────────────────
-FIGURES["black_impostor_defeat"] = {
-    "name": "BLACK IMPOSTOR 💀",
-    "emoji": "🔪",
-    "rarity": "mítico",
-    "price": 0,
-    "hp": 500,
-    "attack": 32,
-    "defense": 40,
-    "speed": 41,
-    "image": "https://dthezntil550i.cloudfront.net/fs/latest/fs2309010928400340024226439/1280_960/ad0ab693-75e0-4dcf-9873-1b53dadf28c0.png",
-}
-
-FIGURE_SKILLS["el_muneco"] = [
-    {
-        "name": "Ultra Attack",
-        "cost": 30,
-        "type": "ultra_attack",
-        "power": 105,
-        "charge_turns": 2,
-        "desc": "Se potencia 2 turnos y luego golpea. 105 daño base.",
-    },
-    {
-        "name": "Golden Power",
-        "cost": 60,
-        "type": "aoe_damage",
-        "power": 50,
-        "desc": "50 daño a TODOS los enemigos.",
-    },
-    {
-        "name": "Regeneración Pura",
-        "cost": 100,
-        "type": "muneco_regen",
-        "power": 0,
-        "charge_turns": 5,
-        "desc": "Carga 5 turnos y luego cura toda su vida.",
-    },
-]
-
-FIGURE_SKILLS["el_espectro"] = [
-    {
-        "name": "Kidnapping",
-        "cost": 30,
-        "type": "kidnapping",
-        "power": 15,
-        "desc": '"Let me take you to my world..." — Agarra a un oponente, 15 daño/turno. Minijuego para escapar.',
-    },
-    {
-        "name": "Evil Laugh",
-        "cost": 60,
-        "type": "heal_team_self",
-        "power": 40,
-        "team_heal_power": 30,
-        "desc": '"IM SPECTRE AND IM EVIL!" — Cura 40 HP al Espectro y 30 a sus aliados.',
-    },
-    {
-        "name": "The power within me...",
-        "cost": 100,
-        "type": "spectro_vanish",
-        "power": 30,
-        "desc": '"NOW YOURE GETTING INTO MY SHOW!" — El Espectro y otra figura desaparecen. Las otras 2 figuras restantes reciben 30 daño.',
-    },
-]
-
-FIGURE_SKILLS["black_impostor_defeat"] = [
-    {
-        "name": "SPRINT UP",
-        "cost": 30,
-        "type": "sprint_up",
-        "power": 20,
-        "dot_turns": 4,
-        "charges_needed": 3,
-        "desc": '"IM GOING TO CATCH YOU!" — Úsala 3 veces para activar: 20 daño/turno x4.',
-    },
-    {
-        "name": "IM RIGHT BEHIND YOU...",
-        "cost": 60,
-        "type": "right_behind_you",
-        "power": 50,
-        "immune_turns": 3,
-        "break_damage": 80,
-        "stun_on_break": 2,
-        "desc": '"Theres no escape..." — Inmune 3T. Si le haces 80 daño: Black stuneado 2T. Si no: 50 daño + stun 1T.',
-    },
-    {
-        "name": "SPEED UP SLASH",
-        "cost": 100,
-        "type": "speed_up_slash",
-        "power": 0,
-        "warning_turns": 1,
-        "desc": '"You arent escaping this time..." — INSTAKILL. Avisa 1 turno antes. Sobrevivible con Frasquito de Glitch.',
-    },
-]
-
-# ── EQUIPO DEL JEFE FINAL ─────────────────────────────────
-# El jefe secreto usa: EL MUÑECO + EL ESPECTRO + Toby Fox
-SECRET_FINAL_BOSS = {
-    "id": "el_muneco_secreto",
-    "name": "👑 EL MUÑECO 🗣️",
-    "desc": "El jefe final secreto. ¿Estás seguro de que quieres hacer esto?",
-    "difficulty": 10,
-    "team": ["el_muneco", "el_espectro", "toby_fox"],
-    "level": 50,
-    "hp_mult": 1.0,
-    "atk_mult": 1.0,
-    "energy_bonus": 0,
-    "reward_coins": 99999,
-    "reward_xp": 9999,
-    "unlock_requirement": "vencedor_batalla",  # Logro requerido
-}
-
-DEFEAT_BOSS = {
-    "id": "defeat_impostor",
-    "name": "💀 DEFEAT",
-    "desc": "Una versión más fuerte del Black Impostor. Desbloqueada al derrotar a todos los impostores.",
-    "difficulty": 9,
-    "team": ["black_impostor_defeat"],
-    "level": 40,
-    "hp_mult": 1.0,
-    "atk_mult": 1.0,
-    "energy_bonus": 20,
-    "reward_coins": 5000,
-    "reward_xp": 800,
-    "unlock_requirement": "vencedor_batalla",
-}
-
-# ── LOGROS SECRETOS ──────────────────────────────────────────────────────────
-# (Se registran en el sistema de logros existente)
-LOGRO_GLITCH_10 = {
-    "id": "glitch_10_wins",
-    "secret": True,
-    "name": "😈 Esto solo es el comienzo...",
-    "desc": "Derrota a Glitch 10 veces.",
-    "reward_coins": 200,
-    "reward_item": "glitch_vial",
-}
-
-LOGRO_VENCEDOR_BATALLA = {
-    "id": "vencedor_batalla",
-    "secret": True,
-    "name": "🦝 Vencedor de la Batalla!",
-    "desc": "¡Derrota a todos los impostores!",
-    "reward_item": "defeat_unlock",  # Desbloquea DEFEAT 💀
-}
-
-# ── HANDLERS DE HABILIDADES DE EL MUÑECO Y EL ESPECTRO ───────────────────────
-# Se añaden al procesador de stype más abajo
-
 # ============================================================
 #  ARRANQUE
 # ============================================================
 bot.run(TOKEN)
-
-
-# ============================================================
-#  OG LIGHT Y OG FIRE — Habilidades
-# ============================================================
-
-FIGURE_SKILLS["og_light"] = [
-    {
-        "name": "Passion for Science",
-        "cost": 30,
-        "type": "passion_science",
-        "power": 20,
-        "atk_buff": 10,
-        "desc": "20 HP a todo el equipo y +10 ATK a Light.",
-    },
-    {
-        "name": "Drones.V4",
-        "cost": 60,
-        "type": "drones_v4",
-        "power": 0,
-        "drone_count": 4,
-        "drone_dmg_min": 3,
-        "drone_dmg_max": 5,
-        "drone_turns": 5,
-        "explode_chance": 15,
-        "explode_dmg": 30,
-        "explode_dot_turns": 3,
-        "desc": "4 drones hacen 3-5 daño/turno x5. 15% de que cada uno explote: 30 daño + burning 3T.",
-    },
-    {
-        "name": "The Ice Age",
-        "cost": 100,
-        "type": "ice_age",
-        "power": 150,
-        "aoe_power": 80,
-        "charge_turns": 6,
-        "frozen_turns": 2,
-        "desc": "Carga 6 turnos. Light no puede actuar. Luego: 150 al activo, 80 a los demás, frozen 2T.",
-    },
-]
-
-FIGURE_SKILLS["og_fire"] = [
-    {
-        "name": "The Trauma...",
-        "cost": 30,
-        "type": "the_trauma",
-        "power": 0,
-        "desc": "1 debuff random a Fire Y a la figura actual del oponente.",
-    },
-    {
-        "name": "BurnOut",
-        "cost": 60,
-        "type": "burnout_fire",
-        "power": 25,
-        "aoe_power": 15,
-        "dot_turns": 3,
-        "dot_power": 5,
-        "desc": "25 daño al activo, 15 a las otras 2, burning 3T a todos.",
-    },
-    {
-        "name": "Phoenix-Like",
-        "cost": 100,
-        "type": "phoenix_like",
-        "power": 20,
-        "dot_turns": 4,
-        "dot_power": 5,
-        "desc": "Fire y una figura aliada al azar mueren. Las otras 2 aliadas reciben 20 daño + burning 4T.",
-    },
-]
 
