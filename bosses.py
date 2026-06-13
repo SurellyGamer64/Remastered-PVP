@@ -657,8 +657,6 @@ _roblox_skills = [
 FIGURE_SKILLS["roblox"] = _roblox_skills
 FIGURE_SKILLS["roblox_boss"] = _roblox_skills
 
-# ── KIRBY ───────────────────────────────────────────────────────
-KIRBY_DEFAULT_SKILLS = [
 IMPOSTOR_REWARDS = {
     3: {"coins": 4000, "recipe_sheets": 2, "auto_levels": 2,  "xp": 600,  "achievement": True},
     4: {"coins": 2500, "recipe_sheets": 1, "auto_levels": 1,  "xp": 450,  "achievement": False},
@@ -667,8 +665,3 @@ IMPOSTOR_REWARDS = {
     7: {"coins": 0,    "recipe_sheets": 0, "auto_levels": 0,  "xp": 0,    "achievement": False},
 }
 
-async def _start_impostor_7v3(interaction: discord.Interaction, bot_data: dict, user_figs: list, user_data: dict, db):
-    """Muestra el menú de selección de figuras para la batalla 7v3 del Impostor Negro."""
-    uid = interaction.user.id
-
-    embed = discord.Embed(

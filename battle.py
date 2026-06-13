@@ -30,12 +30,6 @@ pending_pvp    = {}
 ENERGY_PER_TURN = 20
 ENERGY_MAX      = 100
 
-active_battles = {}
-pending_pvp = {}
-
-ENERGY_PER_TURN = 20
-ENERGY_MAX = 100
-
 def make_fighter(fig_key, owner_fig_data, hp_mult=1.0, atk_mult=1.0, energy_bonus=0):
     """Crea un luchador con HP, energía y habilidades listas."""
     fig = FIGURES[fig_key]
@@ -3502,3 +3496,4 @@ async def end_battle(interaction, battle: BattleState, channel_id: int, winner_t
                 changed = True
         if changed:
             save_db(db3)
+

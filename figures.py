@@ -1414,3 +1414,4 @@ FIGURE_SKILLS["og_gamer64"] = [
         "desc": "Gamer explota acabando con todo. Mata a todas las figuras del oponente y a sí mismo. 20 de daño a las figuras aliadas por la explosión.",
     },
 ]
+

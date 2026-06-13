@@ -185,724 +185,227 @@ def give_battle_ingredient(user):
     user["ingredients"][ingredient] = user["ingredients"].get(ingredient, 0) + 1
     return ingredient
 
-@bot.tree.command(name="ingredientes", description="Ve tus ingredientes de cocina actuales")
-async def ingredientes_cmd(interaction: discord.Interaction):
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-    ings = user.get("ingredients", {})
-    # Langosta del inventario de figuras
-    lobster_count = sum(1 for f in user.get("figures", []) if f["key"] == "lobster")
-    embed = discord.Embed(title="🧑‍🍳 Tu despensa", color=0xe67e22)
-    ing_str = ""
-    if lobster_count:
-        ing_str += f"🦞 Langosta x{lobster_count}\n"
-    for emoji, amount in ings.items():
-        name = INGREDIENTS.get(emoji, emoji)
-        ing_str += f"{emoji} {name} x{amount}\n"
-    embed.description = ing_str or "_Sin ingredientes. ¡Gana batallas o consigue una langosta!_"
-    embed.set_footer(text=f"Recetas globales cocinadas: {global_recipe_count}/{TOTAL_RECIPES_FOR_EVENT}")
-    await interaction.response.send_message(embed=embed)
-
-@bot.tree.command(name="cook", description="Cocina una receta combinando una langosta con hasta 3 ingredientes")
-async def cook_cmd(interaction: discord.Interaction):
-    global global_recipe_count, lobster_madre_active
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-    lobster_idx = next((i for i, f in enumerate(user.get("figures", [])) if f["key"] == "lobster"), None)
-    if lobster_idx is None:
-        await interaction.response.send_message("❌ Necesitas al menos una 🦞 Langosta. Consíguela con `/lobster`.", ephemeral=True)
-        return
-    ings = user.get("ingredients", {})
-    available = {k: v for k, v in ings.items() if v > 0}
-    if not available:
-        await interaction.response.send_message("❌ No tienes ingredientes. ¡Gana batallas para conseguir algunos!", ephemeral=True)
-        return
-
-    ing_options = [
-        discord.SelectOption(label=f"{INGREDIENTS.get(emoji, emoji)} x{amt}", value=emoji)
-        for emoji, amt in available.items()
-    ]
-    state = {"selected": [], "user_id": interaction.user.id}
-
-    def make_embed():
-        selected_str = " + ".join(state["selected"]) if state["selected"] else "_Ninguno aún_"
-        return discord.Embed(
-            title="🧑‍🍳 ¡Hora de cocinar!",
-            description=f"🦞 Langosta + **{selected_str}**\n\nElige hasta 3 ingredientes y luego **Cocinar**:",
-            color=0xe67e22
-        )
-
-    def make_view():
-        view = discord.ui.View(timeout=60)
-
-        if len(state["selected"]) < 3:
-            sel = discord.ui.Select(placeholder="Añadir ingrediente...", options=ing_options, max_values=1)
-            async def add_ingredient(si: discord.Interaction):
-                if si.user.id != state["user_id"]:
-                    await si.response.send_message("❌ No es tu menú.", ephemeral=True)
-                    return
-                state["selected"].append(sel.values[0])
-                await si.response.edit_message(embed=make_embed(), view=make_view())
-            sel.callback = add_ingredient
-            view.add_item(sel)
-
-        if len(state["selected"]) > 0:
-            undo_btn = discord.ui.Button(label="↩️ Quitar último", style=discord.ButtonStyle.secondary)
-            async def undo(ui: discord.Interaction):
-                if ui.user.id != state["user_id"]:
-                    await ui.response.send_message("❌ No es tu menú.", ephemeral=True)
-                    return
-                state["selected"].pop()
-                await ui.response.edit_message(embed=make_embed(), view=make_view())
-            undo_btn.callback = undo
-            view.add_item(undo_btn)
-
-            cook_btn = discord.ui.Button(label="🍳 ¡Cocinar!", style=discord.ButtonStyle.success)
-            async def do_cook(ci: discord.Interaction):
-                if ci.user.id != state["user_id"]:
-                    await ci.response.send_message("❌ No es tu menú.", ephemeral=True)
-                    return
-                global global_recipe_count, lobster_madre_active
-                db2 = load_db()
-                user2 = get_user(db2, ci.user.id)
-                lb_idx = next((i for i, f in enumerate(user2.get("figures", [])) if f["key"] == "lobster"), None)
-                if lb_idx is None:
-                    await ci.response.edit_message(content="❌ Ya no tienes langosta.", embed=None, view=None)
-                    return
-                ings2 = user2.get("ingredients", {})
-                for ing in state["selected"]:
-                    if ings2.get(ing, 0) <= 0:
-                        await ci.response.edit_message(content=f"❌ Ya no tienes {ing}.", embed=None, view=None)
-                        return
-                # Consumir langosta e ingredientes
-                user2["figures"].pop(lb_idx)
-                for ing in state["selected"]:
-                    ings2[ing] -= 1
-                user2["ingredients"] = ings2
-                # Buscar receta
-                matched = None
-                for recipe in RECIPES:
-                    if set(recipe["ingredients"]) == set(["🦞"] + state["selected"]):
-                        matched = recipe
-                        break
-                # Verificar hojas de receta conocidas
-                if not matched:
-                    for idx in user2.get("recipe_sheets", []):
-                        if idx < len(RECIPES):
-                            recipe = RECIPES[idx]
-                            if set(recipe["ingredients"]) == set(["🦞"] + state["selected"]):
-                                matched = recipe
-                                break
-                global_recipe_count += 1
-                user2["recipe_count"] = user2.get("recipe_count", 0) + 1
-                # Logros de receta
-                new_achs = check_achievements(user2, {"action": "cook"})
-                if new_achs:
-                    ach_names = [ACHIEVEMENTS[a]["name"] for a in new_achs]
-                    await interaction.followup.send(f"🏅 ¡Logro desbloqueado! {' · '.join(ach_names)}", ephemeral=True)
-                # XP al jugador por cocinar
-                user2["xp"] = user2.get("xp", 0) + 20
-                _check_player_levelup(user2)
-                if matched:
-                    if "buffs" not in user2:
-                        user2["buffs"] = []
-                    user2["buffs"].append({"effect": matched["effect"], "value": matched["value"], "turns": matched["turns"]})
-                    if matched["effect"] == "level_fig":
-                        team = user2.get("team", [])
-                        if team and team[0] is not None and team[0] < len(user2.get("figures", [])):
-                            fig = user2["figures"][team[0]]
-                            if fig.get("level", 1) < FIGURE_LEVEL_MAX:
-                                fig["level"] = fig.get("level", 1) + 1
-                    recipe_name = matched["name"]
-                    result_desc = matched["desc"]
-                    color = 0x2ecc71
-                else:
-                    recipe_name = "💀 Receta Fallida"
-                    result_desc = "Los ingredientes no tienen sinergia entre sí... Se arruinó la comida. No obtienes ningún beneficio.\n\n💡 _Tip: explora para encontrar Hojas de Receta._"
-                    color = 0xe74c3c
-                save_db(db2)
-                embed2 = discord.Embed(title=f"{'✅' if matched else '❌'} {recipe_name}", description=result_desc, color=color)
-                embed2.set_footer(text=f"Recetas globales: {global_recipe_count}/{TOTAL_RECIPES_FOR_EVENT}")
-                await ci.response.edit_message(embed=embed2, view=None)
-                if global_recipe_count >= TOTAL_RECIPES_FOR_EVENT and not lobster_madre_active:
-                    lobster_madre_active = True
-                    await trigger_lobster_madre(ci.channel)
-            cook_btn.callback = do_cook
-            view.add_item(cook_btn)
-
-        return view
-
-    await interaction.response.send_message(embed=make_embed(), view=make_view(), ephemeral=True)
-
-# ─── LANGOSTA MADRE (evento global) ───────────────────────────────────────────
-LOBSTER_MADRE_HP = 300000
-lobster_madre_state = {}
-
-async def trigger_lobster_madre(channel):
-    """Inicia el evento global de la Langosta Madre."""
-    global lobster_madre_state
-    lobster_madre_state = {
-        "hp": LOBSTER_MADRE_HP,
-        "max_hp": LOBSTER_MADRE_HP,
-        "participants": {},  # user_id -> damage dealt
-        "active": True,
-    }
-    embed = discord.Embed(
-        title="🦞🦞🦞 ¡APARECE LA LANGOSTA MADRE! 🦞🦞🦞",
-        description=(
-            "¡40 recetas han sido cocinadas! ¡La **LANGOSTA MADRE** ha despertado!\n\n"
-            "❤️ **HP:** 300,000\n⚔️ **ATK:** 70 | 🛡️ **DEF:** 30\n\n"
-            "**¡Tienes 60 segundos para unirte!** Todos los jugadores que se unan atacarán juntos."
-        ),
-        color=0xe74c3c
-    )
-    view = discord.ui.View(timeout=60)
-    join_btn = discord.ui.Button(label="⚔️ ¡UNIRME AL ATAQUE!", style=discord.ButtonStyle.danger, custom_id="join_lobster")
-    async def join_cb(inter: discord.Interaction):
-        uid = inter.user.id
-        if not lobster_madre_state.get("active"):
-            await inter.response.send_message("❌ El evento ya terminó.", ephemeral=True)
-            return
-        if uid in lobster_madre_state["participants"]:
-            await inter.response.send_message("✅ Ya estás en el ataque!", ephemeral=True)
-            return
-        lobster_madre_state["participants"][uid] = 0
-        await inter.response.send_message(f"⚔️ ¡<@{uid}> se unió al ataque! Ya somos **{len(lobster_madre_state['participants'])}** guerreros!", ephemeral=False)
-    join_btn.callback = join_cb
-    view.add_item(join_btn)
-    msg = await channel.send(embed=embed, view=view)
-    await asyncio.sleep(60)
-    # ¡A pelear!
-    await run_lobster_madre_battle(channel, msg)
-
-async def run_lobster_madre_battle(channel, msg):
-    """Ejecuta la batalla contra la Langosta Madre con todos los participantes."""
-    global lobster_madre_active
-    participants = list(lobster_madre_state.get("participants", {}).keys())
-    if not participants:
-        await channel.send("🦞 Nadie se unió al ataque... La Langosta Madre se retira victoriosa.")
-        lobster_madre_active = False
-        return
-
-    lm_hp = lobster_madre_state["hp"]
-    lm_max = lobster_madre_state["max_hp"]
-    lm_atk = 70
-    all_skills_pool = [sk for skills in FIGURE_SKILLS.values() for sk in skills
-                       if sk["type"] not in ("consumed_fury", "revive_team", "ban_hammer", "drain_fill", "lobster")]
-    round_num = 0
-
-    while lm_hp > 0 and participants:
-        round_num += 1
-        log = [f"**Ronda {round_num}**"]
-
-        # Jugadores atacan
-        db = load_db()
-        total_dmg = 0
-        for uid in participants[:]:
-            user = get_user(db, uid)
-            if not user:
-                participants.remove(uid)
-                continue
-            # Ataque básico del jugador
-            atk = random.randint(15, 40)
-            lm_hp = max(0, lm_hp - atk)
-            total_dmg += atk
-            lobster_madre_state["participants"][uid] = lobster_madre_state["participants"].get(uid, 0) + atk
-        log.append(f"⚔️ Los {len(participants)} guerreros hacen **{total_dmg}** daño total! (🦞 HP: {lm_hp:,}/{lm_max:,})")
-
-        if lm_hp <= 0:
-            break
-
-        # Langosta Madre ataca con habilidad aleatoria
-        skill_used = random.choice(all_skills_pool)
-        dmg_to_all = random.randint(20, lm_atk)
-        log.append(f"🦞 **¡LANGOSTA MADRE** usa **{skill_used['name']}**! ¡{dmg_to_all} daño a todos!")
-
-        bar_len = 20
-        filled = int((lm_hp / lm_max) * bar_len)
-        hp_bar = "🟥" * filled + "⬛" * (bar_len - filled)
-
-        embed = discord.Embed(
-            title="🦞 LANGOSTA MADRE",
-            description=f"{hp_bar}\n❤️ **{lm_hp:,}/{lm_max:,} HP**\n\n" + "\n".join(log),
-            color=0xe74c3c if lm_hp > lm_max * 0.5 else 0x95a5a6
-        )
-        await msg.edit(embed=embed)
-        await asyncio.sleep(3)
-
-        if lm_hp <= 0:
-            break
-
-    # Resultado
-    lobster_madre_active = False
-    if lm_hp <= 0:
-        db = load_db()
-        rewards_text = []
-        for uid, dmg in lobster_madre_state["participants"].items():
-            user = get_user(db, uid)
-            if user:
-                coins_reward = 500 + (dmg // 10)
-                user["coins"] = user.get("coins", 0) + coins_reward
-                rewards_text.append(f"<@{uid}>: +{coins_reward}🪙 ({dmg} daño total)")
-        save_db(db)
-        embed = discord.Embed(
-            title="🏆 ¡LANGOSTA MADRE DERROTADA!",
-            description="¡Increíble! ¡Los guerreros lograron derrotar a la Langosta Madre!\n\n" + "\n".join(rewards_text[:10]),
-            color=0x2ecc71
-        )
-    else:
-        embed = discord.Embed(
-            title="💀 La Langosta Madre sobrevivió...",
-            description=f"¡La LANGOSTA MADRE sobrevivió con **{lm_hp:,} HP** restantes! ¡Mejor suerte la próxima vez!",
-            color=0xe74c3c
-        )
-    await channel.send(embed=embed)
-
-
-def _make_stat_up_view(fig_data: dict, fig_key: str, user_data: dict, user_id: int, db) -> discord.ui.View:
-    """Crea la view de selección de stat para el level up. Sin async."""
-    view = discord.ui.View(timeout=60)
-    stats = [("hp","❤️ HP"),("attack","⚔️ ATK"),("defense","🛡️ DEF"),("speed","⚡ VEL")]
-    for stat_key, stat_label in stats:
-        btn = discord.ui.Button(label=f"{stat_label} +2", style=discord.ButtonStyle.primary, custom_id=f"su_{stat_key}_{fig_key}")
-        async def cb(inter: discord.Interaction, sk=stat_key, fk=fig_key, uid=user_id):
-            if inter.user.id != uid:
-                await inter.response.send_message("❌ No es tu elección.", ephemeral=True)
-                return
-            db2 = load_db()
-            u2 = get_user(db2, uid)
-            target = next((f for f in u2.get("figures",[]) if f.get("key")==fk and f.get("pending_stat_up",0)>0), None)
-            if not target:
-                await inter.response.edit_message(content="✅ Ya procesado.", embed=None, view=None)
-                return
-            if "stat_ups" not in target: target["stat_ups"] = {}
-            target["stat_ups"][sk] = target["stat_ups"].get(sk,0) + 2
-            target["pending_stat_up"] = target.get("pending_stat_up",0) - 1
-            save_db(db2)
-            fig_base = FIGURES.get(fk,{})
-            ok_embed = discord.Embed(
-                title=f"✅ ¡+2 {sk.upper()} a {fig_base.get('name',fk)}!",
-                description=f"Tu figura ahora tiene **+{target['stat_ups'].get(sk,0)}** de bonus en {sk}.",
-                color=0x2ecc71
-            )
-            await inter.response.edit_message(embed=ok_embed, view=None)
-            # Si quedan más pendientes, mostrar otro menú
-            if target.get("pending_stat_up",0) > 0:
-                db3 = load_db()
-                u3 = get_user(db3, uid)
-                t2 = next((f for f in u3.get("figures",[]) if f.get("key")==fk and f.get("pending_stat_up",0)>0), None)
-                if t2:
-                    v2 = _make_stat_up_view(t2, fk, u3, uid, db3)
-                    again_embed = discord.Embed(
-                        title=f"⬆️ ¡{fig_base.get('emoji','')} {fig_base.get('name',fk)} subió otro nivel!",
-                        description="Elige otro stat:",
-                        color=0xf1c40f
-                    )
-                    await inter.followup.send(embed=again_embed, view=v2)
-        btn.callback = cb
-        view.add_item(btn)
-    return view
 
 # ============================================================
-#  SISTEMA DE LEVEL UP CON ELECCIÓN DE STAT (figuras)
+#  FIGURE LEVEL MAX
 # ============================================================
 FIGURE_LEVEL_MAX = 30
-FIGURE_LEVEL_MAX = 30
 
-def check_figure_levelup(fig_data, interaction_hook=None):
-    """
-    Verifica si una figura subió de nivel y devuelve (leveled_up, new_level).
-    fig_data es el dict de la figura del usuario (con key, level, xp, stat_ups).
-    """
-    leveled = False
-    while fig_data.get("level", 1) < FIGURE_LEVEL_MAX:
-        needed = xp_to_level_up(fig_data.get("level", 1))
-        if fig_data.get("xp", 0) >= needed:
-            fig_data["xp"] -= needed
-            fig_data["level"] = fig_data.get("level", 1) + 1
-            fig_data["pending_stat_up"] = fig_data.get("pending_stat_up", 0) + 1
-            leveled = True
-        else:
-            break
-    return leveled
-
-async def prompt_stat_up(interaction: discord.Interaction, fig_data: dict, fig_key: str, db):
-    """Muestra un menú para elegir qué stat subir al subir de nivel."""
-    pending = fig_data.get("pending_stat_up", 0)
-    if pending <= 0:
-        return
-    fig_base  = FIGURES.get(fig_key, {})
-    fig_name  = fig_base.get("name", fig_key)
-    fig_emoji = fig_base.get("emoji", "🎭")
+def check_figure_levelup(fig_data: dict, interaction_hook=None) -> bool:
+    """Sube de nivel la figura si tiene suficiente XP. Devuelve True si subió."""
     lvl = fig_data.get("level", 1)
-
-    embed = discord.Embed(
-        title=f"⬆️ ¡{fig_emoji} {fig_name} subió al nivel {lvl}!",
-        description="Elige **una mejora permanente**:",
-        color=0xf1c40f
-    )
-
-    # Opciones: +10 HP | +5 ATK | +5 VEL | +10 Barra de carga
-    STAT_OPTIONS = [
-        ("hp",         "❤️ +10 Vida",          "hp",      10),
-        ("attack",     "⚔️ +5 Ataque",          "attack",  5),
-        ("speed",      "⚡ +5 Velocidad",        "speed",   5),
-        ("energy_cap", "🔋 +10 Barra de carga", "energy_cap", 10),
-    ]
-
-    view = discord.ui.View(timeout=60)
-    user_id = interaction.user.id
-
-    def make_callback(stat_key, stat_label, stat_field, stat_amt):
-        async def callback(inter: discord.Interaction):
-            if inter.user.id != user_id:
-                await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
-                return
-            db2 = load_db()
-            u2 = get_user(db2, user_id)
-            if not u2:
-                await inter.response.send_message("❌ Error al cargar tu perfil.", ephemeral=True)
-                return
-            target = next((f for f in u2.get("figures", []) if f.get("key") == fig_key and f.get("pending_stat_up", 0) > 0), None)
-            if not target:
-                await inter.response.edit_message(content="✅ Ya fue procesado.", embed=None, view=None)
-                return
-            if "stat_ups" not in target:
-                target["stat_ups"] = {}
-            target["stat_ups"][stat_field] = target["stat_ups"].get(stat_field, 0) + stat_amt
-            target["pending_stat_up"] = target.get("pending_stat_up", 0) - 1
-            save_db(db2)
-            result_embed = discord.Embed(
-                title=f"✅ {fig_emoji} {fig_name} — ¡Mejora aplicada!",
-                description=f"**{stat_label}** permanente! (Nv.{target.get('level',1)})\nTotal bonus {stat_field}: **+{target['stat_ups'].get(stat_field,0)}**",
-                color=0x2ecc71
-            )
-            await inter.response.edit_message(embed=result_embed, view=None)
-            if target.get("pending_stat_up", 0) > 0:
-                await asyncio.sleep(1)
-                await prompt_stat_up(inter, target, fig_key, db2)
-        return callback
-
-    for stat_key, stat_label, stat_field, stat_amt in STAT_OPTIONS:
-        btn = discord.ui.Button(label=stat_label, style=discord.ButtonStyle.primary)
-        btn.callback = make_callback(stat_key, stat_label, stat_field, stat_amt)
-        view.add_item(btn)
-
-    try:
-        if hasattr(interaction, 'followup'):
-            await interaction.followup.send(embed=embed, view=view)
-        else:
-            await interaction.channel.send(embed=embed, view=view)
-    except Exception:
-        pass
+    xp  = fig_data.get("xp", 0)
+    if lvl >= FIGURE_LEVEL_MAX:
+        return False
+    needed = 100 * lvl
+    if xp >= needed:
+        fig_data["level"] = lvl + 1
+        fig_data["xp"]    = xp - needed
+        return True
+    return False
 
 # ============================================================
-#  LEADERBOARDS EXPANDIDOS
+#  PLAYER LEVEL MAX + LEVELUP
 # ============================================================
-@bot.tree.command(name="leaderboard", description="Ver los rankings del servidor")
-async def leaderboard_cmd(interaction: discord.Interaction):
-    view = discord.ui.View(timeout=60)
+PLAYER_LEVEL_MAX = 100
 
-LEARN_TREE = {
-    # ── RAMA ORO ─────────────────────────────────────────────
-    "gold_1": {
-        "name": "💰 Buscador de Oro I",
-        "desc": "Ganas +15% más monedas en batallas y recompensas diarias.",
-        "rama": "💰 Oro",
-        "max_level": 3,
-        "cost": 1,          # SP por nivel
-        "requires": None,
-        "effect_key": "gold_bonus_pct",
-        "effect_per_level": 15,
-    },
-    "gold_2": {
-        "name": "💰 Mercader II",
-        "desc": "Descuento del 10% en la tienda por nivel.",
-        "rama": "💰 Oro",
-        "max_level": 3,
-        "cost": 2,
-        "requires": "gold_1",   # necesitas gold_1 al máximo
-        "effect_key": "shop_discount_pct",
-        "effect_per_level": 10,
-    },
-    "gold_3": {
-        "name": "💰 Magnate III",
-        "desc": "Ganas +1 moneda extra por cada punto de daño que haces en batalla.",
-        "rama": "💰 Oro",
-        "max_level": 2,
-        "cost": 3,
-        "requires": "gold_2",
-        "effect_key": "dmg_to_coins",
-        "effect_per_level": 1,
-    },
-    # ── RAMA XP ──────────────────────────────────────────────
-    "xp_1": {
-        "name": "📚 Estudiante I",
-        "desc": "+20% XP ganada en todas las acciones.",
-        "rama": "📚 Experiencia",
-        "max_level": 3,
-        "cost": 1,
-        "requires": None,
-        "effect_key": "xp_bonus_pct",
-        "effect_per_level": 20,
-    },
-    "xp_2": {
-        "name": "📚 Erudito II",
-        "desc": "Tus figuras también ganan +20% XP en batallas y exploraciones.",
-        "rama": "📚 Experiencia",
-        "max_level": 3,
-        "cost": 2,
-        "requires": "xp_1",
-        "effect_key": "fig_xp_bonus_pct",
-        "effect_per_level": 20,
-    },
-    "xp_3": {
-        "name": "📚 Maestro III",
-        "desc": "El tiempo de exploración se reduce un 20% por nivel.",
-        "rama": "📚 Experiencia",
-        "max_level": 2,
-        "cost": 3,
-        "requires": "xp_2",
-        "effect_key": "explore_time_reduction_pct",
-        "effect_per_level": 20,
-    },
-    # ── RAMA EXPLORACIÓN ─────────────────────────────────────
-    "explore_1": {
-        "name": "🗺️ Explorador I",
-        "desc": "+1 objeto garantizado por exploración.",
-        "rama": "🗺️ Exploración",
-        "max_level": 3,
-        "cost": 1,
-        "requires": None,
-        "effect_key": "explore_bonus_items",
-        "effect_per_level": 1,
-    },
-    "explore_2": {
-        "name": "🗺️ Rastreador II",
-        "desc": "+15% de probabilidad de conseguir figuras en exploraciones.",
-        "rama": "🗺️ Exploración",
-        "max_level": 2,
-        "cost": 2,
-        "requires": "explore_1",
-        "effect_key": "explore_fig_chance_bonus",
-        "effect_per_level": 15,
-    },
-    "explore_3": {
-        "name": "🗺️ Leyenda III",
-        "desc": "Posibilidad de encontrar figuras épicas/legendarias en exploración.",
-        "rama": "🗺️ Exploración",
-        "max_level": 1,
-        "cost": 4,
-        "requires": "explore_2",
-        "effect_key": "explore_rare_unlock",
-        "effect_per_level": 1,
-    },
-    # ── RAMA COCINA ──────────────────────────────────────────
-    "cook_1": {
-        "name": "🧑‍🍳 Aprendiz de Cocina I",
-        "desc": "+1 ingrediente de regalo al cocinar por nivel.",
-        "rama": "🧑‍🍳 Cocina",
-        "max_level": 2,
-        "cost": 1,
-        "requires": None,
-        "effect_key": "cook_bonus_ingredient",
-        "effect_per_level": 1,
-    },
-    "cook_2": {
-        "name": "🧑‍🍳 Chef II",
-        "desc": "50% de no consumir ingredientes al fallar una receta.",
-        "rama": "🧑‍🍳 Cocina",
-        "max_level": 1,
-        "cost": 3,
-        "requires": "cook_1",
-        "effect_key": "cook_fail_save",
-        "effect_per_level": 1,
-    },
-}
-
-def get_learn_effect(user_data: dict, effect_key: str) -> int:
-    """Devuelve el valor total de un efecto del árbol para un usuario."""
-    tree = user_data.get("learn_tree", {})
-    total = 0
-    for nid, node in LEARN_TREE.items():
-        if node["effect_key"] == effect_key:
-            lvl = tree.get(nid, 0)
-            total += lvl * node["effect_per_level"]
-@bot.tree.command(name="logros", description="Ver tus logros conseguidos y los que faltan")
-async def logros_cmd(interaction: discord.Interaction):
-    db   = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-
-    uid    = interaction.user.id
-    earned = set(user.get("achievements", []))
-    total  = len(ACHIEVEMENTS)
-    done   = len(earned)
-
-    # Construir lista completa: conseguidos primero, luego pendientes
-    items = []
-    for aid, ach in ACHIEVEMENTS.items():
-        if aid in earned:
-            items.append(("done", aid, ach))
-    for aid, ach in ACHIEVEMENTS.items():
-        if aid not in earned:
-            items.append(("pending", aid, ach))
-
-    PAGE_SIZE = 8  # fields por página (bien dentro del límite de 25)
-    total_pages = max(1, (len(items) + PAGE_SIZE - 1) // PAGE_SIZE)
-
-    def build_logros_embed(page: int) -> discord.Embed:
-        embed = discord.Embed(
-            title=f"🏅 Logros — {user['name']}",
-            description=f"**{done}/{total}** conseguidos  |  Página {page+1}/{total_pages}",
-            color=0xf1c40f
-        )
-        start = page * PAGE_SIZE
-        for status, aid, ach in items[start:start + PAGE_SIZE]:
-            if status == "done":
-                embed.add_field(name=f"✅ {ach['name']}", value=ach["desc"], inline=True)
-            else:
-                if ach.get("secret"):
-                    embed.add_field(name="🔒 ???", value="*Logro secreto*", inline=True)
-                else:
-                    embed.add_field(name=f"⬜ {ach['name']}", value=ach["desc"], inline=True)
-        embed.set_footer(text="✅ Conseguido  ·  ⬜ Pendiente  ·  🔒 Secreto")
-        return embed
-
-    def build_logros_view(page: int) -> discord.ui.View:
-        view = discord.ui.View(timeout=120)
-        prev_btn = discord.ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=page == 0)
-        next_btn = discord.ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=page >= total_pages - 1)
-
-        def make_nav(new_page):
-            async def cb(inter: discord.Interaction):
-                if inter.user.id != uid:
-                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
-                    return
-                await inter.response.edit_message(
-                    embed=build_logros_embed(new_page),
-                    view=build_logros_view(new_page)
-                )
-            return cb
-
-        prev_btn.callback = make_nav(page - 1)
-        next_btn.callback = make_nav(page + 1)
-        view.add_item(prev_btn)
-        view.add_item(next_btn)
-        return view
-
-    await interaction.response.send_message(
-        embed=build_logros_embed(0),
-        view=build_logros_view(0),
-        ephemeral=True
-    )
-
-# ── RECOMPENSAS VARIABLES DEL IMPOSTOR NEGRO (7v3) ──────────────────────────
-IMPOSTOR_REWARDS = {
-    3: {"coins": 4000, "recipe_sheets": 2, "auto_levels": 2,  "xp": 600,  "achievement": True},
-    4: {"coins": 2500, "recipe_sheets": 1, "auto_levels": 1,  "xp": 450,  "achievement": False},
-def _register_kill_for_love(owner_id, battle=None):
-    """Registra un kill en la DB del jugador para el LOVE Check de Sans (permanente)."""
-    if not owner_id:
-        return
-    try:
-        db = load_db()
-        user = get_user(db, owner_id)
-        if user:
-            user["total_kills"] = user.get("total_kills", 0) + 1
-            save_db(db)
-    except Exception:
-        pass
-
-def _get_love_kills(battle, attacker) -> int:
-    """Devuelve el total de kills del atacante: kills en batalla + kills globales en DB."""
-    battle_kills = attacker.get("total_kills", 0)
-    # Intentar leer kills globales si hay owner_id
-    owner_id = attacker.get("owner_id")
-    if owner_id:
-        try:
-            db = load_db()
-            user = get_user(db, owner_id)
-            if user:
-                return user.get("total_kills", 0)
-        except Exception:
-            pass
-    return battle_kills
-
-def _apply_recipe_buffs(user_data: dict, team: list, db) -> str | None:
-    """Aplica los buffs de receta activos del usuario a su equipo y los consume.
-    Devuelve 'good'/'bad' si había receta papyrus_special, None si no."""
-    buffs = user_data.get("buffs", [])
-    if not buffs:
-        return None
-    remaining = []
-    papyrus_result = None
-    # El resultado de papyrus se tira UNA sola vez para todo el equipo
-    papyrus_rolled = False
-    papyrus_good   = False
-    for b in buffs:
-        effect = b.get("effect")
-        val    = b.get("value", 0)
-        turns  = b.get("turns", 1)
-        if effect == "papyrus_special" and not papyrus_rolled:
-            papyrus_good   = random.randint(1, 100) <= 90
-            papyrus_rolled = True
-            papyrus_result = "good" if papyrus_good else "bad"
-        for fig in team:
-            if effect == "hp_boost":
-                fig["hp"]     = fig["hp"] + val
-                fig["max_hp"] = fig["max_hp"] + val
-            elif effect == "atk_boost":
-                fig["atk"] = fig.get("atk", 0) + val
-            elif effect in ("all_boost",):
-                fig["atk"]    = fig.get("atk", 0) + b.get("atk_bonus", 0)
-                hp_b          = b.get("hp_bonus", 0)
-                fig["hp"]     = fig["hp"] + hp_b
-                fig["max_hp"] = fig["max_hp"] + hp_b
-            elif effect == "papyrus_special":
-                sign = 1 if papyrus_good else -1
-                fig["atk"]    = max(1, fig.get("atk", 0) + sign * b.get("atk_bonus", 25))
-                hp_b          = b.get("hp_bonus", 40)
-                def_b         = b.get("def_bonus", 25)
-                fig["hp"]     = max(1, fig["hp"] + sign * hp_b)
-                fig["max_hp"] = max(1, fig["max_hp"] + sign * hp_b)
-                fig["defense"]= max(0, fig.get("defense", 0) + sign * def_b)
-        if effect in ("coins_boost", "xp_boost"):
-            remaining.append(b)
-        elif turns > 1:
-            remaining.append({**b, "turns": turns - 1})
-    user_data["buffs"] = remaining
-    return papyrus_result
-
-def _check_player_levelup(user_data: dict) -> list[int]:
+def _check_player_levelup(user_data: dict) -> list:
     """Sube el nivel del jugador. Por cada nivel nuevo da 1 skill point."""
     new_levels = []
     while user_data.get("level", 1) < PLAYER_LEVEL_MAX:
-        needed = xp_to_level_up(user_data.get("level", 1))
+        needed = 100 * user_data.get("level", 1)
         if user_data.get("xp", 0) >= needed:
-            user_data["xp"] -= needed
-            user_data["level"] = user_data.get("level", 1) + 1
-            user_data["skill_points"] = user_data.get("skill_points", 0) + 1
+            user_data["xp"]          = user_data["xp"] - needed
+            user_data["level"]       = user_data.get("level", 1) + 1
+            user_data["skill_points"]= user_data.get("skill_points", 0) + 1
             new_levels.append(user_data["level"])
         else:
             break
     return new_levels
 
 # ============================================================
-#  ÁRBOL DE APRENDIZAJE (SKILL POINTS)
+#  LEARN TREE
 # ============================================================
-# Estructura: id -> {name, desc, max_level, cost_per_level, rama, requires, effect_key, effect_per_level}
-# effect aplicado en tiempo de ejecución según effect_key
 LEARN_TREE = {
-    # ── RAMA ORO ─────────────────────────────────────────────
-    "gold_1": {
-        "name": "💰 Buscador de Oro I",
-        "desc": "Ganas +15% más monedas en batallas y recompensas diarias.",
+    "coin_boost_1":    {"name": "💰 Monedas+",       "desc": "+10% monedas por victoria.",          "cost": 1, "effect": "coin_multiplier",   "value": 0.10, "requires": []},
+    "coin_boost_2":    {"name": "💰 Monedas++",      "desc": "+20% monedas por victoria.",          "cost": 2, "effect": "coin_multiplier",   "value": 0.20, "requires": ["coin_boost_1"]},
+    "xp_boost_1":     {"name": "⬆️ XP+",            "desc": "+15% XP por batalla.",                "cost": 1, "effect": "xp_multiplier",     "value": 0.15, "requires": []},
+    "xp_boost_2":     {"name": "⬆️ XP++",           "desc": "+30% XP por batalla.",                "cost": 2, "effect": "xp_multiplier",     "value": 0.30, "requires": ["xp_boost_1"]},
+    "hp_passive":     {"name": "❤️ Vida Extra",      "desc": "+20 HP base a todas las figuras.",    "cost": 2, "effect": "hp_bonus",          "value": 20,   "requires": []},
+    "atk_passive":    {"name": "⚔️ Ataque Extra",   "desc": "+5 ATK base a todas las figuras.",    "cost": 2, "effect": "atk_bonus",         "value": 5,    "requires": []},
+    "def_passive":    {"name": "🛡️ Defensa Extra",  "desc": "+5 DEF base a todas las figuras.",    "cost": 2, "effect": "def_bonus",         "value": 5,    "requires": []},
+    "energy_start":   {"name": "⚡ Energía Inicial","desc": "Empieza las batallas con +20 energía.","cost": 2, "effect": "energy_start",      "value": 20,   "requires": []},
+    "ingredient_luck":{"name": "🧺 Suerte Ing.",    "desc": "+15% prob. de ingrediente en batallas.","cost":2, "effect": "ingredient_chance",  "value": 15,   "requires": []},
+    "shop_discount":  {"name": "🛒 Descuento",       "desc": "-10% precios en tiendas.",            "cost": 3, "effect": "shop_discount",     "value": 0.10, "requires": ["coin_boost_1"]},
+    "rebirth_bonus":  {"name": "🔄 Rebirth+",        "desc": "+50 monedas extra por Rebirth.",      "cost": 3, "effect": "rebirth_coins",     "value": 50,   "requires": ["coin_boost_2"]},
+}
+
+def get_learn_effect(user_data: dict, effect_key: str) -> int:
+    """Devuelve el valor total de un efecto del árbol para el usuario."""
+    tree = user_data.get("learn_tree", {})
+    total = 0
+    for node_id, node in LEARN_TREE.items():
+        if tree.get(node_id) and node.get("effect") == effect_key:
+            total += node.get("value", 0)
+    return total
+
+# ============================================================
+#  QUESTS
+# ============================================================
+QUESTS = {
+    "documentos_jane": {
+        "name": "📄 Documentos de Jane",
+        "desc": "Jane Doe escondió sus documentos. Consigue 6 ganando batallas para desbloquearla.",
+        "goal": 6,
+        "progress_key": "docs_collected",
+        "reward_key": "jane_unlocked",
+        "reward_desc": "🔓 ¡Jane Doe desbloqueada en la tienda!",
+        "drop_chance": 60,
+    },
+}
+
+def is_quest_unlocked(user: dict, quest_id: str) -> bool:
+    return user.get("quests_completed", {}).get(quest_id, False)
+
+def get_quest_progress(user: dict, quest_id: str) -> int:
+    return user.get("quest_progress", {}).get(quest_id, 0)
+
+async def check_quest_drops(user: dict, quest_id: str, channel, db=None):
+    from database import save_db as _save_db
+    quest = QUESTS.get(quest_id)
+    if not quest or is_quest_unlocked(user, quest_id):
+        return
+    if quest_id not in user.get("active_quests", []):
+        return
+    if random.randint(1, 100) <= quest["drop_chance"]:
+        user.setdefault("quest_progress", {})[quest_id] = user["quest_progress"].get(quest_id, 0) + 1
+        prog = user["quest_progress"][quest_id]
+        if db: _save_db(db)
+        await channel.send(f"📄 **¡Documento encontrado!** ({prog}/{quest['goal']}) — **{quest['name']}**")
+        if prog >= quest["goal"]:
+            user.setdefault("quests_completed", {})[quest_id] = True
+            if quest_id == "documentos_jane":
+                user["jane_unlocked"] = True
+            if db: _save_db(db)
+            await channel.send(f"🎉 **¡MISIÓN COMPLETADA!** {quest['name']}\n{quest['reward_desc']}")
+
+# ============================================================
+#  LOVE SYSTEM (Sans)
+# ============================================================
+
+def _register_kill_for_love(owner_id, battle=None):
+    if not owner_id:
+        return
+    try:
+        from database import load_db as _load_db, save_db as _save_db, get_user as _get_user
+        db   = _load_db()
+        user = _get_user(db, owner_id)
+        if user:
+            user["total_kills"] = user.get("total_kills", 0) + 1
+            _save_db(db)
+    except Exception:
+        pass
+
+def _get_love_kills(battle, attacker) -> int:
+    try:
+        from database import load_db as _load_db, get_user as _get_user
+        db   = _load_db()
+        user = _get_user(db, getattr(battle, "p1_id", None))
+        if user:
+            return user.get("total_kills", 0)
+    except Exception:
+        pass
+    return 0
+
+# ============================================================
+#  ACHIEVEMENTS
+# ============================================================
+ACHIEVEMENTS = {
+    "first_figure":    {"name": "🎭 El principio...",          "desc": "Compra tu primera figura.",                        "secret": False},
+    "first_win":       {"name": "🏆 Primera Victoria",         "desc": "Gana tu primera batalla.",                         "secret": False},
+    "wins_10":         {"name": "⚔️ Guerrero",                 "desc": "Gana 10 batallas.",                                "secret": False},
+    "wins_100":        {"name": "💀 Leyenda del PvP",          "desc": "Gana 100 batallas.",                               "secret": False},
+    "first_level":     {"name": "⬆️ Subí de nivel!",           "desc": "Sube de nivel por primera vez.",                   "secret": False},
+    "fig_first_level": {"name": "⬆️ Subamos las cosas!",       "desc": "Sube de nivel una figura.",                        "secret": False},
+    "first_recipe":    {"name": "🧑‍🍳 Chef Novato",             "desc": "Descubre tu primera receta.",                      "secret": False},
+    "recipes_10":      {"name": "🧑‍🍳 Chef Profesional",        "desc": "Descubre 10 recetas.",                             "secret": False},
+    "first_explore":   {"name": "🗺️ Explorador Nato",          "desc": "Completa tu primera exploración.",                  "secret": False},
+    "reach_level_10":  {"name": "🌟 Nivel 10",                 "desc": "Llega al nivel 10.",                               "secret": False},
+    "reach_level_30":  {"name": "🌟 Nivel 30",                 "desc": "Llega al nivel 30.",                               "secret": False},
+    "reach_level_50":  {"name": "🌟 Nivel 50",                 "desc": "Llega al nivel 50.",                               "secret": False},
+    "reach_level_100": {"name": "👑 Nivel 100",                "desc": "Alcanza el nivel máximo.",                         "secret": False},
+    "first_rebirth":   {"name": "🔄 He vuelto...",             "desc": "Haz tu primer Rebirth.",                           "secret": False},
+    "first_combine":   {"name": "🔀 Experimento Loco!",        "desc": "Combina figuras por primera vez.",                  "secret": False},
+    "first_learn":     {"name": "📚 Primer Conocimiento",      "desc": "Aprende tu primer nodo del árbol.",                "secret": False},
+    "mythic_owned":    {"name": "🔱 Coleccionista Mítico",     "desc": "Consigue una figura mítica.",                      "secret": False},
+    "secret_store":    {"name": "🔒 El Código Correcto",       "desc": "Desbloquea la tienda secreta.",                    "secret": True},
+    "beat_nino":       {"name": "👦 Niños al recreo",          "desc": "Derrota al Niño Random.",                          "secret": False},
+    "beat_paper":      {"name": "📄 Tijeras vence a Papel!",   "desc": "Derrota a Paper Mario.",                           "secret": False},
+    "beat_steve":      {"name": "⛏️ Minero Retirado",          "desc": "Derrota a Steve.",                                 "secret": False},
+    "beat_impostor_3": {"name": "🔪 VICTORY! 👑",             "desc": "Vence al Impostor con 3 figuras.",                 "secret": False},
+    "beat_impostor_7": {"name": "😕 Aburrido...",              "desc": "Vence al Impostor con 7 figuras.",                 "secret": True},
+    "beat_antifas":    {"name": "👑 EL NUEVO CAMPEON!",        "desc": "Derrota al Antifas Antifasado.",                   "secret": False},
+    "daily_streak_7":  {"name": "📅 Racha de 7 días",          "desc": "Mantén racha diaria 7 días.",                      "secret": False},
+    "coins_10000":     {"name": "💰 Rico Rico",                "desc": "Acumula 10,000 monedas.",                          "secret": False},
+    "fig_max_level":   {"name": "⬆️ Al Límite",               "desc": "Sube una figura al nivel máximo (30).",            "secret": False},
+    "kirby_no_mas":          {"name": "🚫 NO MAS KIRBY!",                   "desc": "... Nunca debiste intentar absorber eso...", "secret": True},
+    "kirby_no_entendiste":   {"name": "🚫 NO ME ENTENDISTE!!?? NO MAS!!", "desc": "NO... SOLO.... NO!!",                    "secret": True},
+}
+
+def grant_achievement(user_data: dict, achievement_id: str) -> bool:
+    if achievement_id not in ACHIEVEMENTS:
+        return False
+    earned = user_data.setdefault("achievements", [])
+    if achievement_id in earned:
+        return False
+    earned.append(achievement_id)
+    return True
+
+def check_achievements(user_data: dict, context: dict) -> list:
+    from figures import FIGURES as _FIGURES
+    new    = []
+    w      = user_data.get("wins", 0)
+    lvl    = user_data.get("level", 1)
+    rc     = user_data.get("recipe_count", 0)
+    figs   = user_data.get("figures", [])
+    coins  = user_data.get("coins", 0)
+    action = context.get("action", "")
+
+    checks = {
+        "first_figure":    len(figs) >= 1,
+        "first_win":       w >= 1,
+        "wins_10":         w >= 10,
+        "wins_100":        w >= 100,
+        "first_level":     lvl >= 2,
+        "reach_level_10":  lvl >= 10,
+        "reach_level_30":  lvl >= 30,
+        "reach_level_50":  lvl >= 50,
+        "reach_level_100": lvl >= 100,
+        "first_recipe":    rc >= 1,
+        "recipes_10":      rc >= 10,
+        "first_rebirth":   user_data.get("rebirth_count", 0) >= 1,
+        "coins_10000":     coins >= 10000,
+        "mythic_owned":    any(_FIGURES.get(f["key"], {}).get("rarity", "").lower() in ("mítico",) for f in figs),
+        "fig_max_level":   any(f.get("level", 1) >= FIGURE_LEVEL_MAX for f in figs),
+        "fig_first_level": any(f.get("level", 1) >= 2 for f in figs),
+    }
+    if action == "explore":      checks["first_explore"] = True
+    if action == "combine":      checks["first_combine"] = True
+    if action == "learn":        checks["first_learn"]   = True
+    if action == "secret_store": checks["secret_store"]  = True
+    if action == "daily_7":      checks["daily_streak_7"]= True
+
+    boss = context.get("boss_id", "")
+    ts   = context.get("team_size", 3)
+    if boss == "nino_random":   checks["beat_nino"]       = True
+    if boss == "paper_mario":   checks["beat_paper"]      = True
+    if boss == "steve":         checks["beat_steve"]      = True
+    if boss == "jefe":          checks["beat_antifas"]    = True
+    if boss == "impostor_negro":
+        if ts <= 3: checks["beat_impostor_3"] = True
+        if ts >= 7: checks["beat_impostor_7"] = True
+
+    for aid, cond in checks.items():
+        if cond and grant_achievement(user_data, aid):
+            new.append(aid)
+    return new
