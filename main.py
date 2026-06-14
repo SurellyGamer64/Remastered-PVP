@@ -1,8 +1,8 @@
 """
 main.py — Entrypoint de Render para Androide PVP.
 
-Estructura de archivos:
-  main.py              ← este archivo
+Estructura:
+  main.py              ← este archivo (único entrypoint)
   database.py          ← load_db / save_db
   figures.py           ← FIGURES, FIGURE_SKILLS, constantes
   battle.py            ← BattleState, execute_action, bot_turn, end_battle
@@ -12,8 +12,8 @@ Estructura de archivos:
   commands_shop.py     ← /tienda, /secret-store
   commands_battle.py   ← /pvp-enemy, /pvp-boss, /retar, /ranking, /diario, /reset
   commands_profile.py  ← /registrar, /perfil, /misfiguras, /equipar
-  commands_economy.py  ← /cook, /work, /rob, /trade, /explore, /quest, /learn, /rebirth, /combine
-  commands_admin.py    ← /oro, /bomb, /nuke, /gift, /say, /holy, /get, /ayuda
+  commands_economy.py  ← /cook, /work, /rob, /trade, /explore, /quest, /learn, /rebirth, /combine, etc.
+  commands_admin.py    ← /oro, /bomb, /nuke, /gift, /get, /holy, /ayuda
 """
 
 import os
@@ -24,12 +24,11 @@ import discord
 from discord.ext import commands
 from flask import Flask, request, send_file
 
-# ── Core imports ─────────────────────────────────────────────────────────────
-from database import load_db, save_db, get_user, create_user
-from figures import FIGURES, SECRET_FIGURES, RARITY_COLOR, RARITY_STARS
+from database import load_db, save_db
+from figures import FIGURES, SECRET_FIGURES
 from shops import _reset_shops
 
-# ── Command modules ───────────────────────────────────────────────────────────
+# ── importar módulos de comandos (sin bot todavía — solo definen funciones) ──
 import commands_shop
 import commands_battle
 import commands_profile
@@ -43,11 +42,9 @@ import commands_admin
 BACKUP_KEY = os.getenv("BACKUP_KEY", "mateo_backup_2024")
 flask_app  = Flask("")
 
-
 @flask_app.route("/")
 def home():
     return "Bot Online"
-
 
 @flask_app.route("/backup")
 def backup_db_route():
@@ -59,7 +56,6 @@ def backup_db_route():
         return send_file(db_file, mimetype="application/json",
                          as_attachment=True, download_name="db.json")
     return json.dumps({"users": {}}), 200, {"Content-Type": "application/json"}
-
 
 @flask_app.route("/upload_db", methods=["POST"])
 def upload_db_route():
@@ -74,9 +70,7 @@ def upload_db_route():
         json.dump(data, f, indent=2, ensure_ascii=False)
     return "Database restaurada correctamente.", 200
 
-
 threading.Thread(target=lambda: flask_app.run(host="0.0.0.0", port=8080), daemon=True).start()
-
 
 # ============================================================
 #  BOT SETUP
@@ -91,19 +85,12 @@ intents.members         = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
-
-# ============================================================
-#  REGISTRAR COMANDOS SLASH
-# ============================================================
-
-# Módulos con register_commands(bot)
+# ── Registrar todos los comandos slash ahora que bot existe ──────────────────
 commands_battle.register_commands(bot)
-
-# Módulos que registran sus comandos al importarse (usan @bot.tree directamente)
-# → commands_shop, commands_profile, commands_economy, commands_admin
-# Si aún no los migras a register_commands(), regístralos manualmente aquí:
-# (por ahora los importamos arriba; sus decoradores @bot.tree.command se ejecutan al import)
-
+commands_shop.register_commands(bot)
+commands_profile.register_commands(bot)
+commands_economy.register_commands(bot)
+commands_admin.register_commands(bot)
 
 # ============================================================
 #  EVENTS
@@ -113,7 +100,6 @@ commands_battle.register_commands(bot)
 async def on_ready():
     print(f"✅ {bot.user} está en línea!")
     _reset_shops(FIGURES, SECRET_FIGURES)
-
     if GUILD_ID:
         guild  = discord.Object(id=GUILD_ID)
         bot.tree.copy_global_to(guild=guild)
@@ -122,7 +108,6 @@ async def on_ready():
     else:
         synced = await bot.tree.sync()
         print(f"✅ {len(synced)} comandos sincronizados globalmente")
-
 
 # ============================================================
 #  ARRANCAR BOT

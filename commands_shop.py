@@ -22,66 +22,6 @@ from economy import (
     give_battle_ingredient, grant_achievement, get_learn_effect,
 )
 
-@bot.tree.command(name="tienda", description="Elige entre 6 tiendas y compra figuras")
-async def tienda(interaction: discord.Interaction):
-    db   = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-
-    uid = interaction.user.id
-
-    # ── Menú de selección de tienda ──────────────────────────
-    embed = discord.Embed(
-        title="🏪 ¿Qué tienda quieres visitar?",
-        description="Cada tienda tiene su propio stock y probabilidades de rareza.",
-        color=0xf39c12
-    )
-    # Mostrar info de disponibilidad y probabilidades por tienda
-    AVAIL_LABELS = {
-        "mercado":  "60–80%",
-        "gamer":    "76–90%",
-        "tails":    "75–89%",
-        "bar":      "50–80%",
-        "toad":     "40–50%",
-        "acertijo": "100%",
-    }
-    for sid, shop in SHOPS.items():
-        w = shop["weights"]
-        avail_pct = AVAIL_LABELS.get(sid, "?")
-        if sid == "acertijo":
-            value_txt = (
-                f"{shop['desc']}\n"
-                f"`Disponibilidad: {avail_pct} · Solo vende sobres misteriosos`"
-            )
-        else:
-            active_rarezas = [f"{r} {p}%" for r, p in w.items() if p > 0]
-            mythic_c = SHOP_MYTHIC_CHANCE.get(sid, 0)
-            if mythic_c > 0:
-                active_rarezas.append(f"mítico {mythic_c}%")
-            value_txt = (
-                f"{shop['desc']}\n"
-                f"`Disponibilidad: {avail_pct} · {' · '.join(active_rarezas)}`"
-            )
-        embed.add_field(name=shop["name"], value=value_txt, inline=False)
-
-    view = discord.ui.View(timeout=120)
-    for sid, shop in SHOPS.items():
-        btn = discord.ui.Button(label=shop["name"], style=discord.ButtonStyle.primary, custom_id=f"shop_{sid}")
-        def make_shop_cb(shop_id=sid):
-            async def cb(inter: discord.Interaction):
-                if inter.user.id != uid:
-                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
-                    return
-                await _show_shop(inter, shop_id, db, user, uid, edit=True)
-            return cb
-        btn.callback = make_shop_cb()
-        view.add_item(btn)
-
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-
 async def _show_acertijo(interaction: discord.Interaction, user: dict, uid: int, edit: bool):
     """
     Tienda El Acertijo — solo vende sobres misteriosos.
@@ -417,109 +357,6 @@ def check_achievements(user_data: dict, context: dict) -> list[str]:
             new.append(aid)
     return new
 
-@bot.tree.command(name="secret-store", description="???")
-@app_commands.describe(codigo="Código de acceso (si no lo sabes, buena suerte)")
-async def secret_store(interaction: discord.Interaction, codigo: str = ""):
-    uid = interaction.user.id
-
-    # Verificar acceso
-    if uid not in secret_store_unlocked:
-        if codigo == SECRET_CODE:
-            secret_store_unlocked.add(uid)
-        else:
-            await interaction.response.send_message(
-                "🔒 Acceso denegado. Necesitas el código correcto.",
-                ephemeral=True
-            )
-            return
-
-    # Construir embed de la tienda secreta
-    embed = discord.Embed(
-        title="🔱 TIENDA SECRETA",
-        description=(
-            "Bienvenido a la tienda que no debería existir.\n"
-            "Aquí encontrarás las figuras más **OP** del juego.\n"
-            "⚠️ *Información clasificada. No compartas este lugar.*"
-        ),
-        color=0xff00ff
-    )
-
-    for key in SECRET_FIGURES:
-        fig = FIGURES.get(key)
-        if not fig:
-            continue
-        rarity_star = RARITY_STARS.get(fig["rarity"].lower(), "🔱")
-        embed.add_field(
-            name=f"{fig['emoji']} {fig['name']} — {fig['price']:,}🪙",
-            value=(
-                f"{rarity_star} **{fig['rarity'].upper()}**\n"
-                f"❤️ Vida: `{fig['hp']}` ⚔️ Ataque: `{fig['attack']}`\n"
-                f"🛡️ Defensa: `{fig['defense']}` ⚡ Velocidad: `{fig['speed']}`"
-            ),
-            inline=False
-        )
-
-    embed.set_footer(text="Usa los botones de abajo para comprar. ¡Que no se entere nadie!")
-
-    # Botones de compra
-    view = discord.ui.View(timeout=120)
-    for key in SECRET_FIGURES:
-        fig = FIGURES.get(key)
-        if not fig:
-            continue
-
-        def make_buy_cb(fig_key=key):
-            async def buy_cb(inter: discord.Interaction):
-                if inter.user.id != uid:
-                    await inter.response.send_message("❌ Esta tienda es tuya, no de otros.", ephemeral=True)
-                    return
-                db2 = load_db()
-                buyer = get_user(db2, inter.user.id)
-                if not buyer:
-                    await inter.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-                    return
-                fig2 = FIGURES[fig_key]
-                price = fig2["price"]
-                if buyer.get("coins", 0) < price:
-                    await inter.response.send_message(
-                        f"❌ No tienes suficiente oro. Necesitas **{price:,}**🪙 y tienes **{buyer.get('coins',0):,}**🪙.",
-                        ephemeral=True
-                    )
-                    return
-                buyer["coins"] -= price
-                buyer.setdefault("figures", []).append({"key": fig_key, "level": 1, "xp": 0})
-                # Auto-equipar si hay hueco
-                team = buyer.get("team", [None, None, None])
-                while len(team) < 3:
-                    team.append(None)
-                for i in range(3):
-                    if team[i] is None:
-                        team[i] = len(buyer["figures"]) - 1
-                        break
-                buyer["team"] = team
-                save_db(db2)
-                confirm_embed = discord.Embed(
-                    title=f"🔱 ¡Adquirida! {fig2['name']}",
-                    description=f"Has obtenido **{fig2['name']}** {fig2['emoji']}.\n¡Úsala con sabiduría!",
-                    color=0xff00ff
-                )
-                confirm_embed.add_field(name="💳 Saldo restante", value=f"**{buyer['coins']:,}**🪙", inline=True)
-                if fig2.get("image"):
-                    confirm_embed.set_thumbnail(url=fig2["image"])
-                await inter.response.send_message(embed=confirm_embed, ephemeral=True)
-            return buy_cb
-
-        btn = discord.ui.Button(
-            label=f"Comprar {fig['name']} ({fig['price']:,}🪙)",
-            style=discord.ButtonStyle.danger,
-            custom_id=f"secret_buy_{key}"
-        )
-        btn.callback = make_buy_cb()
-        view.add_item(btn)
-
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-
 # ============================================================
 #  /get — Pase dorado exclusivo [GAMER64]
 # ============================================================
@@ -552,3 +389,172 @@ def _get_all_by_rarity():
         norm = _RARITY_NORM.get(fig.get("rarity","común"), "común")
         by_r[norm].append((key, fig))
     return by_r
+
+
+def register_commands(bot):
+    """Registra los comandos slash de este módulo. Llamar desde main.py."""
+
+    @bot.tree.command(name="tienda", description="Elige entre 6 tiendas y compra figuras")
+    async def tienda(interaction: discord.Interaction):
+        db   = load_db()
+        user = get_user(db, interaction.user.id)
+        if not user:
+            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+
+        uid = interaction.user.id
+
+        # ── Menú de selección de tienda ──────────────────────────
+        embed = discord.Embed(
+            title="🏪 ¿Qué tienda quieres visitar?",
+            description="Cada tienda tiene su propio stock y probabilidades de rareza.",
+            color=0xf39c12
+        )
+        # Mostrar info de disponibilidad y probabilidades por tienda
+        AVAIL_LABELS = {
+            "mercado":  "60–80%",
+            "gamer":    "76–90%",
+            "tails":    "75–89%",
+            "bar":      "50–80%",
+            "toad":     "40–50%",
+            "acertijo": "100%",
+        }
+        for sid, shop in SHOPS.items():
+            w = shop["weights"]
+            avail_pct = AVAIL_LABELS.get(sid, "?")
+            if sid == "acertijo":
+                value_txt = (
+                    f"{shop['desc']}\n"
+                    f"`Disponibilidad: {avail_pct} · Solo vende sobres misteriosos`"
+                )
+            else:
+                active_rarezas = [f"{r} {p}%" for r, p in w.items() if p > 0]
+                mythic_c = SHOP_MYTHIC_CHANCE.get(sid, 0)
+                if mythic_c > 0:
+                    active_rarezas.append(f"mítico {mythic_c}%")
+                value_txt = (
+                    f"{shop['desc']}\n"
+                    f"`Disponibilidad: {avail_pct} · {' · '.join(active_rarezas)}`"
+                )
+            embed.add_field(name=shop["name"], value=value_txt, inline=False)
+
+        view = discord.ui.View(timeout=120)
+        for sid, shop in SHOPS.items():
+            btn = discord.ui.Button(label=shop["name"], style=discord.ButtonStyle.primary, custom_id=f"shop_{sid}")
+            def make_shop_cb(shop_id=sid):
+                async def cb(inter: discord.Interaction):
+                    if inter.user.id != uid:
+                        await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                        return
+                    await _show_shop(inter, shop_id, db, user, uid, edit=True)
+                return cb
+            btn.callback = make_shop_cb()
+            view.add_item(btn)
+
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
+
+    @bot.tree.command(name="secret-store", description="???")
+    @app_commands.describe(codigo="Código de acceso (si no lo sabes, buena suerte)")
+    async def secret_store(interaction: discord.Interaction, codigo: str = ""):
+        uid = interaction.user.id
+
+        # Verificar acceso
+        if uid not in secret_store_unlocked:
+            if codigo == SECRET_CODE:
+                secret_store_unlocked.add(uid)
+            else:
+                await interaction.response.send_message(
+                    "🔒 Acceso denegado. Necesitas el código correcto.",
+                    ephemeral=True
+                )
+                return
+
+        # Construir embed de la tienda secreta
+        embed = discord.Embed(
+            title="🔱 TIENDA SECRETA",
+            description=(
+                "Bienvenido a la tienda que no debería existir.\n"
+                "Aquí encontrarás las figuras más **OP** del juego.\n"
+                "⚠️ *Información clasificada. No compartas este lugar.*"
+            ),
+            color=0xff00ff
+        )
+
+        for key in SECRET_FIGURES:
+            fig = FIGURES.get(key)
+            if not fig:
+                continue
+            rarity_star = RARITY_STARS.get(fig["rarity"].lower(), "🔱")
+            embed.add_field(
+                name=f"{fig['emoji']} {fig['name']} — {fig['price']:,}🪙",
+                value=(
+                    f"{rarity_star} **{fig['rarity'].upper()}**\n"
+                    f"❤️ Vida: `{fig['hp']}` ⚔️ Ataque: `{fig['attack']}`\n"
+                    f"🛡️ Defensa: `{fig['defense']}` ⚡ Velocidad: `{fig['speed']}`"
+                ),
+                inline=False
+            )
+
+        embed.set_footer(text="Usa los botones de abajo para comprar. ¡Que no se entere nadie!")
+
+        # Botones de compra
+        view = discord.ui.View(timeout=120)
+        for key in SECRET_FIGURES:
+            fig = FIGURES.get(key)
+            if not fig:
+                continue
+
+            def make_buy_cb(fig_key=key):
+                async def buy_cb(inter: discord.Interaction):
+                    if inter.user.id != uid:
+                        await inter.response.send_message("❌ Esta tienda es tuya, no de otros.", ephemeral=True)
+                        return
+                    db2 = load_db()
+                    buyer = get_user(db2, inter.user.id)
+                    if not buyer:
+                        await inter.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+                        return
+                    fig2 = FIGURES[fig_key]
+                    price = fig2["price"]
+                    if buyer.get("coins", 0) < price:
+                        await inter.response.send_message(
+                            f"❌ No tienes suficiente oro. Necesitas **{price:,}**🪙 y tienes **{buyer.get('coins',0):,}**🪙.",
+                            ephemeral=True
+                        )
+                        return
+                    buyer["coins"] -= price
+                    buyer.setdefault("figures", []).append({"key": fig_key, "level": 1, "xp": 0})
+                    # Auto-equipar si hay hueco
+                    team = buyer.get("team", [None, None, None])
+                    while len(team) < 3:
+                        team.append(None)
+                    for i in range(3):
+                        if team[i] is None:
+                            team[i] = len(buyer["figures"]) - 1
+                            break
+                    buyer["team"] = team
+                    save_db(db2)
+                    confirm_embed = discord.Embed(
+                        title=f"🔱 ¡Adquirida! {fig2['name']}",
+                        description=f"Has obtenido **{fig2['name']}** {fig2['emoji']}.\n¡Úsala con sabiduría!",
+                        color=0xff00ff
+                    )
+                    confirm_embed.add_field(name="💳 Saldo restante", value=f"**{buyer['coins']:,}**🪙", inline=True)
+                    if fig2.get("image"):
+                        confirm_embed.set_thumbnail(url=fig2["image"])
+                    await inter.response.send_message(embed=confirm_embed, ephemeral=True)
+                return buy_cb
+
+            btn = discord.ui.Button(
+                label=f"Comprar {fig['name']} ({fig['price']:,}🪙)",
+                style=discord.ButtonStyle.danger,
+                custom_id=f"secret_buy_{key}"
+            )
+            btn.callback = make_buy_cb()
+            view.add_item(btn)
+
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+

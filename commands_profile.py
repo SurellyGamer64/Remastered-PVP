@@ -11,113 +11,9 @@ from figures import (
 )
 from economy import LEARN_TREE, get_learn_effect, ACHIEVEMENTS
 
-@bot.tree.command(name="registrar", description="Regístrate en el Androide del PvP y obtén 1000 monedas!")
-async def registrar(interaction: discord.Interaction):
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if user:
-        await interaction.response.send_message(
-            f"⚠️ Ya estás registrado como **{user['name']}** con **{user['coins']}** monedas!",
-            ephemeral=True
-        )
-        return
-
-    modal = discord.ui.Modal(title="¡Bienvenido al Androide del PvP!")
-
-    name_input = discord.ui.TextInput(
-        label="¿Cómo quieres que te conozca el bot?",
-        placeholder="Ej: El Destructor, MegaGamer, etc.",
-        max_length=32
-    )
-    modal.add_item(name_input)
-
-    async def on_submit(modal_interaction: discord.Interaction):
-        display_name = name_input.value.strip()
-        create_user(db, modal_interaction.user.id, display_name)
-        embed = discord.Embed(
-            title="🎉 ¡Registro exitoso!",
-            description=f"¡Bienvenido, **{display_name}**!\nEres conocido en la arena como el gran **{display_name}**.",
-            color=0x2ecc71
-        )
-        embed.add_field(name="💰 Monedas iniciales", value="1,000 monedas", inline=True)
-        embed.add_field(name="🎮 Siguiente paso", value="Usa `/tienda` para comprar tu primera figura!", inline=True)
-        embed.set_footer(text="¡Que comience la batalla!")
-        await modal_interaction.response.send_message(embed=embed)
-
-    modal.on_submit = on_submit
-    await interaction.response.send_modal(modal)
-
 # --- PERFIL ---
-@bot.tree.command(name="perfil", description="Mira tu perfil o el de otro usuario")
-@app_commands.describe(usuario="Usuario cuyo perfil ver (opcional)")
-async def perfil(interaction: discord.Interaction, usuario: discord.Member = None):
-    db = load_db()
-    target_member = usuario or interaction.user
-    user = get_user(db, target_member.id)
-    if not user:
-        msg = "❌ Ese usuario no está registrado." if usuario else "❌ No estás registrado. Usa `/registrar` primero."
-        await interaction.response.send_message(msg, ephemeral=True)
-        return
-
-    embed = discord.Embed(
-        title=f"👤 Perfil de {user['name']}",
-        color=0x3498db
-    )
-    embed.set_thumbnail(url=target_member.display_avatar.url)
-
-    lvl    = user.get("level", 1)
-    xp     = user.get("xp", 0)
-    sp     = user.get("skill_points", 0)
-    rb     = user.get("rebirth_count", 0)
-    rc     = user.get("recipe_count", 0)
-
-    rebirth_str = f"🔄 **×{rb}**" if rb > 0 else "—"
-    embed.add_field(name="💰 Monedas",      value=f"{user['coins']:,}",               inline=True)
-    embed.add_field(name="🏆 Nivel",         value=f"{lvl}",                           inline=True)
-    embed.add_field(name="⚡ XP",            value=f"{xp}/{xp_to_level_up(lvl)}",      inline=True)
-    embed.add_field(name="✨ Skill Points",  value=f"**{sp}** SP disponibles",         inline=True)
-    embed.add_field(name="🔄 Rebirths",      value=rebirth_str,                        inline=True)
-    embed.add_field(name="🧑‍🍳 Recetas",      value=f"{rc} descubiertas",               inline=True)
-    embed.add_field(name="✅ Victorias",     value=user.get("wins", 0),                inline=True)
-    embed.add_field(name="❌ Derrotas",      value=user.get("losses", 0),              inline=True)
-    embed.add_field(name="🎭 Figuras",       value=len(user.get("figures", [])),        inline=True)
-
-    # Nodos activos del árbol
-    tree = user.get("learn_tree", {})
-    active_nodes = [nid for nid, lvl in tree.items() if lvl > 0]
-    if active_nodes:
-        node_names = [LEARN_TREE.get(nid, {}).get("name", nid) for nid in active_nodes]
-        embed.add_field(name="📚 Árbol de aprendizaje", value=", ".join(node_names), inline=False)
-
-    active = user.get("active_figure")
-    if active:
-        fig = FIGURES.get(active)
-        if fig:
-            embed.add_field(name="🌟 Figura activa", value=f"{fig['emoji']} {fig['name']}", inline=False)
-
-    await interaction.response.send_message(embed=embed)
-
 # --- TIENDA ---
 # --- MIS FIGURAS ---
-@bot.tree.command(name="misfiguras", description="Ver tu colección de figuras o la de otro usuario")
-@app_commands.describe(usuario="Usuario cuyas figuras ver (opcional)")
-async def misfiguras(interaction: discord.Interaction, usuario: discord.Member = None):
-    db = load_db()
-    target_member = usuario or interaction.user
-    user = get_user(db, target_member.id)
-    if not user:
-        msg = "❌ Ese usuario no está registrado." if usuario else "❌ Usa `/registrar` primero."
-        await interaction.response.send_message(msg, ephemeral=True)
-        return
-
-    figs = user.get("figures", [])
-    if not figs:
-        msg = f"📭 **{user['name']}** no tiene figuras." if usuario else "📭 No tienes figuras. Usa `/tienda` para comprar."
-        await interaction.response.send_message(msg, ephemeral=True)
-        return
-
-    await show_figure_menu(interaction, user, figs, page=0, viewed_user_id=target_member.id)
-
 def get_unique_figs(figs):
     """Devuelve lista de figuras únicas (sin duplicados) con conteo de copias.
     Cada entrada: (key, fig_data_mejor_nivel, count)
@@ -315,15 +211,127 @@ async def show_figure_menu(interaction, user, figs, page: int, viewed_user_id=No
         await interaction.edit_original_response(embed=embed, view=view)
 
 # --- EQUIPAR ---
-@bot.tree.command(name="equipar", description="Arma tu equipo de 3 figuras (frontal, centro, trasero)")
-async def equipar(interaction: discord.Interaction):
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user or not user.get("figures"):
-        await interaction.response.send_message("❌ No tienes figuras. Compra en `/tienda`.", ephemeral=True)
-        return
-
-    await show_equip_menu(interaction, user, step=0)
-
 async def show_equip_menu(interaction, user, step: int):
     pos_names = ["🥇 Frontal", "🥈 Centro", "🥉 Trasero"]
+
+
+def register_commands(bot):
+    """Registra los comandos slash de este módulo. Llamar desde main.py."""
+
+    @bot.tree.command(name="registrar", description="Regístrate en el Androide del PvP y obtén 1000 monedas!")
+    async def registrar(interaction: discord.Interaction):
+        db = load_db()
+        user = get_user(db, interaction.user.id)
+        if user:
+            await interaction.response.send_message(
+                f"⚠️ Ya estás registrado como **{user['name']}** con **{user['coins']}** monedas!",
+                ephemeral=True
+            )
+            return
+
+        modal = discord.ui.Modal(title="¡Bienvenido al Androide del PvP!")
+
+        name_input = discord.ui.TextInput(
+            label="¿Cómo quieres que te conozca el bot?",
+            placeholder="Ej: El Destructor, MegaGamer, etc.",
+            max_length=32
+        )
+        modal.add_item(name_input)
+
+        async def on_submit(modal_interaction: discord.Interaction):
+            display_name = name_input.value.strip()
+            create_user(db, modal_interaction.user.id, display_name)
+            embed = discord.Embed(
+                title="🎉 ¡Registro exitoso!",
+                description=f"¡Bienvenido, **{display_name}**!\nEres conocido en la arena como el gran **{display_name}**.",
+                color=0x2ecc71
+            )
+            embed.add_field(name="💰 Monedas iniciales", value="1,000 monedas", inline=True)
+            embed.add_field(name="🎮 Siguiente paso", value="Usa `/tienda` para comprar tu primera figura!", inline=True)
+            embed.set_footer(text="¡Que comience la batalla!")
+            await modal_interaction.response.send_message(embed=embed)
+
+        modal.on_submit = on_submit
+        await interaction.response.send_modal(modal)
+
+
+    @bot.tree.command(name="perfil", description="Mira tu perfil o el de otro usuario")
+    @app_commands.describe(usuario="Usuario cuyo perfil ver (opcional)")
+    async def perfil(interaction: discord.Interaction, usuario: discord.Member = None):
+        db = load_db()
+        target_member = usuario or interaction.user
+        user = get_user(db, target_member.id)
+        if not user:
+            msg = "❌ Ese usuario no está registrado." if usuario else "❌ No estás registrado. Usa `/registrar` primero."
+            await interaction.response.send_message(msg, ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            title=f"👤 Perfil de {user['name']}",
+            color=0x3498db
+        )
+        embed.set_thumbnail(url=target_member.display_avatar.url)
+
+        lvl    = user.get("level", 1)
+        xp     = user.get("xp", 0)
+        sp     = user.get("skill_points", 0)
+        rb     = user.get("rebirth_count", 0)
+        rc     = user.get("recipe_count", 0)
+
+        rebirth_str = f"🔄 **×{rb}**" if rb > 0 else "—"
+        embed.add_field(name="💰 Monedas",      value=f"{user['coins']:,}",               inline=True)
+        embed.add_field(name="🏆 Nivel",         value=f"{lvl}",                           inline=True)
+        embed.add_field(name="⚡ XP",            value=f"{xp}/{xp_to_level_up(lvl)}",      inline=True)
+        embed.add_field(name="✨ Skill Points",  value=f"**{sp}** SP disponibles",         inline=True)
+        embed.add_field(name="🔄 Rebirths",      value=rebirth_str,                        inline=True)
+        embed.add_field(name="🧑‍🍳 Recetas",      value=f"{rc} descubiertas",               inline=True)
+        embed.add_field(name="✅ Victorias",     value=user.get("wins", 0),                inline=True)
+        embed.add_field(name="❌ Derrotas",      value=user.get("losses", 0),              inline=True)
+        embed.add_field(name="🎭 Figuras",       value=len(user.get("figures", [])),        inline=True)
+
+        # Nodos activos del árbol
+        tree = user.get("learn_tree", {})
+        active_nodes = [nid for nid, lvl in tree.items() if lvl > 0]
+        if active_nodes:
+            node_names = [LEARN_TREE.get(nid, {}).get("name", nid) for nid in active_nodes]
+            embed.add_field(name="📚 Árbol de aprendizaje", value=", ".join(node_names), inline=False)
+
+        active = user.get("active_figure")
+        if active:
+            fig = FIGURES.get(active)
+            if fig:
+                embed.add_field(name="🌟 Figura activa", value=f"{fig['emoji']} {fig['name']}", inline=False)
+
+        await interaction.response.send_message(embed=embed)
+
+
+    @bot.tree.command(name="misfiguras", description="Ver tu colección de figuras o la de otro usuario")
+    @app_commands.describe(usuario="Usuario cuyas figuras ver (opcional)")
+    async def misfiguras(interaction: discord.Interaction, usuario: discord.Member = None):
+        db = load_db()
+        target_member = usuario or interaction.user
+        user = get_user(db, target_member.id)
+        if not user:
+            msg = "❌ Ese usuario no está registrado." if usuario else "❌ Usa `/registrar` primero."
+            await interaction.response.send_message(msg, ephemeral=True)
+            return
+
+        figs = user.get("figures", [])
+        if not figs:
+            msg = f"📭 **{user['name']}** no tiene figuras." if usuario else "📭 No tienes figuras. Usa `/tienda` para comprar."
+            await interaction.response.send_message(msg, ephemeral=True)
+            return
+
+        await show_figure_menu(interaction, user, figs, page=0, viewed_user_id=target_member.id)
+
+
+    @bot.tree.command(name="equipar", description="Arma tu equipo de 3 figuras (frontal, centro, trasero)")
+    async def equipar(interaction: discord.Interaction):
+        db = load_db()
+        user = get_user(db, interaction.user.id)
+        if not user or not user.get("figures"):
+            await interaction.response.send_message("❌ No tienes figuras. Compra en `/tienda`.", ephemeral=True)
+            return
+
+        await show_equip_menu(interaction, user, step=0)
+

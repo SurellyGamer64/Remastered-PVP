@@ -17,155 +17,10 @@ from economy import (
 )
 from bosses import BOT_ROSTER
 
-@bot.tree.command(name="lobster", description="🦞 Obtén una langosta misteriosa")
-async def lobster_cmd(interaction: discord.Interaction):
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-
-    user["figures"].append({"key": "lobster", "level": 1, "xp": 0})
-    # Añadir al equipo si hay hueco
-    team = user.get("team", [None, None, None])
-    while len(team) < 3: team.append(None)
-    for i in range(3):
-        if team[i] is None:
-            team[i] = len(user["figures"]) - 1
-            break
-    user["team"] = team
-    save_db(db)
-
-    embed = discord.Embed(
-        title="🦞 Una langosta ha aparecido",
-        description="No sabes de dónde vino. No sabes qué quiere.\nPero ahora es tuya.",
-        color=0xe74c3c
-    )
-    embed.add_field(name="❤️ Vida", value="1", inline=True)
-    embed.add_field(name="⚔️ Ataque", value="1", inline=True)
-    embed.add_field(name="🛡️ Defensa", value="1", inline=True)
-    embed.add_field(
-        name="✨ Habilidad: LOBSTER",
-        value="No hace nada.\nO eso crees. Tiene un **0.01%** de matar a todas las figuras enemigas.",
-        inline=False
-    )
-    embed.set_footer(text="Úsala con /equipar. Buena suerte.")
-    await interaction.response.send_message(embed=embed)
-
 # --- ORO (solo admins) ---
-@bot.tree.command(name="rob", description="Intenta robarle monedas a otro usuario")
-@app_commands.describe(usuario="Usuario al que intentar robar")
-async def rob(interaction: discord.Interaction, usuario: discord.Member):
-    if usuario.id == interaction.user.id:
-        await interaction.response.send_message("❌ No puedes robarte a ti mismo.", ephemeral=True)
-        return
-
-    now = datetime.now(timezone.utc).timestamp()
-    cd_key = interaction.user.id
-    if cd_key in ROB_COOLDOWN:
-        diff = now - ROB_COOLDOWN[cd_key]
-        if diff < 600:  # 10 minutos
-            restante = int(600 - diff)
-            m = restante // 60
-            s = restante % 60
-            await interaction.response.send_message(
-                f"⏰ Cooldown activo. Puedes robar de nuevo en **{m}m {s}s**.", ephemeral=True
-            )
-            return
-
-    db = load_db()
-    robber = get_user(db, interaction.user.id)
-    victim = get_user(db, usuario.id)
-
-    if not robber:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-    if not victim:
-        await interaction.response.send_message("❌ Ese usuario no está registrado.", ephemeral=True)
-        return
-    if victim.get("coins", 0) <= 0:
-        await interaction.response.send_message("❌ Ese usuario no tiene monedas que robar.", ephemeral=True)
-        return
-
-    ROB_COOLDOWN[cd_key] = now
-
-    roll = random.randint(1, 100)
-    if roll <= 10:       # 10% — robo grande
-        pct = random.uniform(0.30, 0.50)
-        result = "grande"
-    elif roll <= 35:     # 25% — robo mediano
-        pct = random.uniform(0.10, 0.29)
-        result = "mediano"
-    elif roll <= 60:     # 25% — robo pequeño
-        pct = random.uniform(0.01, 0.09)
-        result = "pequeño"
-    else:                # 40% — fallo
-        result = "fallo"
-        pct = 0
-
-    embed = discord.Embed(color=0x9b59b6)
-    if result == "fallo":
-        embed.title = "🚨 ¡Te atraparon!"
-        embed.description = f"Intentaste robarle a **{victim['name']}** pero te pillaron con las manos en la masa. ¡Qué vergüenza!"
-        fine = min(victim.get("coins",0), random.randint(20, 80))
-        robber["coins"] = max(0, robber.get("coins",0) - fine)
-        embed.add_field(name="💸 Multa", value=f"-**{fine:,}** monedas por torpe", inline=True)
-    else:
-        stolen = max(1, int(victim.get("coins", 0) * pct))
-        victim["coins"]  = max(0, victim.get("coins",0) - stolen)
-        robber["coins"]  = robber.get("coins",0) + stolen
-        icons = {"grande":"💰💰💰", "mediano":"💰💰", "pequeño":"💰"}
-        embed.title = f"🦹 ¡Robo {icons[result]} exitoso!"
-        embed.description = f"Le robaste a **{victim['name']}** sin que se diera cuenta."
-        embed.add_field(name="💰 Robado", value=f"+**{stolen:,}** monedas", inline=True)
-        embed.add_field(name="📊 Tipo", value=result.capitalize(), inline=True)
-        embed.add_field(name="💳 Tu saldo", value=f"**{robber['coins']:,}**", inline=True)
-
-    save_db(db)
-    embed.set_footer(text="Cooldown: 2 horas")
-    await interaction.response.send_message(embed=embed)
-
 # --- WORK ---
 WORK_COOLDOWN = {}  # {user_id: timestamp}
 WORK_COOLDOWN_SECS = 3600  # 1 hora entre trabajos
-
-@bot.tree.command(name="work", description="Trabaja para ganar monedas con un minijuego")
-async def work(interaction: discord.Interaction):
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-
-    now = datetime.now(timezone.utc).timestamp()
-    if interaction.user.id in WORK_COOLDOWN:
-        diff = now - WORK_COOLDOWN[interaction.user.id]
-        if diff < WORK_COOLDOWN_SECS:
-            restante = int(WORK_COOLDOWN_SECS - diff)
-            m = restante // 60
-            s = restante % 60
-            await interaction.response.send_message(
-                f"⏰ Ya trabajaste hoy. Descansa **{m}m {s}s** más.", ephemeral=True
-            )
-            return
-
-    # Elegir trabajo
-    embed = discord.Embed(
-        title="💼 ¿En qué quieres trabajar hoy?",
-        description="Elige tu trabajo y demuestra lo que vales:",
-        color=0x2ecc71
-    )
-    embed.add_field(name="🍔 Preparar Hamburguesas", value="Secuencia de botones. Recompensa: 80-300🪙", inline=False)
-    embed.add_field(name="🎣 Pescar",                value="Opción múltiple. Recompensa: 50-400🪙",    inline=False)
-    embed.add_field(name="🎬 Crear Videos",          value="Escribe rápido. Recompensa: 100-500🪙",    inline=False)
-
-    view = discord.ui.View(timeout=30)
-    for job_id, label in [("burger","🍔 Hamburguesas"), ("fish","🎣 Pescar"), ("video","🎬 Videos")]:
-        btn = discord.ui.Button(label=label, style=discord.ButtonStyle.primary, custom_id=f"job_{job_id}")
-        btn.callback = make_job_callback(job_id, interaction.user.id)
-        view.add_item(btn)
-
-    await interaction.response.send_message(embed=embed, view=view)
 
 def make_job_callback(job_id: str, user_discord_id: int):
     async def callback(inter: discord.Interaction):
@@ -312,7 +167,7 @@ async def start_video_minigame(inter: discord.Interaction):
         return m.author.id == inter.user.id and m.channel.id == inter.channel_id
 
     try:
-        response = await bot.wait_for("message", check=check, timeout=30)
+        response = await inter.client.wait_for("message", check=check, timeout=30)
         if response.content.strip().lower() == challenge["answer"]:
             coins = random.randint(*challenge["coins"])
             db = load_db(); u = get_user(db, inter.user.id)
@@ -522,161 +377,6 @@ def give_battle_ingredient(user):
         user["ingredients"] = {}
     user["ingredients"][ingredient] = user["ingredients"].get(ingredient, 0) + 1
     return ingredient
-
-@bot.tree.command(name="ingredientes", description="Ve tus ingredientes de cocina actuales")
-async def ingredientes_cmd(interaction: discord.Interaction):
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-    ings = user.get("ingredients", {})
-    # Langosta del inventario de figuras
-    lobster_count = sum(1 for f in user.get("figures", []) if f["key"] == "lobster")
-    embed = discord.Embed(title="🧑‍🍳 Tu despensa", color=0xe67e22)
-    ing_str = ""
-    if lobster_count:
-        ing_str += f"🦞 Langosta x{lobster_count}\n"
-    for emoji, amount in ings.items():
-        name = INGREDIENTS.get(emoji, emoji)
-        ing_str += f"{emoji} {name} x{amount}\n"
-    embed.description = ing_str or "_Sin ingredientes. ¡Gana batallas o consigue una langosta!_"
-    embed.set_footer(text=f"Recetas globales cocinadas: {global_recipe_count}/{TOTAL_RECIPES_FOR_EVENT}")
-    await interaction.response.send_message(embed=embed)
-
-@bot.tree.command(name="cook", description="Cocina una receta combinando una langosta con hasta 3 ingredientes")
-async def cook_cmd(interaction: discord.Interaction):
-    global global_recipe_count, lobster_madre_active
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-    lobster_idx = next((i for i, f in enumerate(user.get("figures", [])) if f["key"] == "lobster"), None)
-    if lobster_idx is None:
-        await interaction.response.send_message("❌ Necesitas al menos una 🦞 Langosta. Consíguela con `/lobster`.", ephemeral=True)
-        return
-    ings = user.get("ingredients", {})
-    available = {k: v for k, v in ings.items() if v > 0}
-    if not available:
-        await interaction.response.send_message("❌ No tienes ingredientes. ¡Gana batallas para conseguir algunos!", ephemeral=True)
-        return
-
-    ing_options = [
-        discord.SelectOption(label=f"{INGREDIENTS.get(emoji, emoji)} x{amt}", value=emoji)
-        for emoji, amt in available.items()
-    ]
-    state = {"selected": [], "user_id": interaction.user.id}
-
-    def make_embed():
-        selected_str = " + ".join(state["selected"]) if state["selected"] else "_Ninguno aún_"
-        return discord.Embed(
-            title="🧑‍🍳 ¡Hora de cocinar!",
-            description=f"🦞 Langosta + **{selected_str}**\n\nElige hasta 3 ingredientes y luego **Cocinar**:",
-            color=0xe67e22
-        )
-
-    def make_view():
-        view = discord.ui.View(timeout=60)
-
-        if len(state["selected"]) < 3:
-            sel = discord.ui.Select(placeholder="Añadir ingrediente...", options=ing_options, max_values=1)
-            async def add_ingredient(si: discord.Interaction):
-                if si.user.id != state["user_id"]:
-                    await si.response.send_message("❌ No es tu menú.", ephemeral=True)
-                    return
-                state["selected"].append(sel.values[0])
-                await si.response.edit_message(embed=make_embed(), view=make_view())
-            sel.callback = add_ingredient
-            view.add_item(sel)
-
-        if len(state["selected"]) > 0:
-            undo_btn = discord.ui.Button(label="↩️ Quitar último", style=discord.ButtonStyle.secondary)
-            async def undo(ui: discord.Interaction):
-                if ui.user.id != state["user_id"]:
-                    await ui.response.send_message("❌ No es tu menú.", ephemeral=True)
-                    return
-                state["selected"].pop()
-                await ui.response.edit_message(embed=make_embed(), view=make_view())
-            undo_btn.callback = undo
-            view.add_item(undo_btn)
-
-            cook_btn = discord.ui.Button(label="🍳 ¡Cocinar!", style=discord.ButtonStyle.success)
-            async def do_cook(ci: discord.Interaction):
-                if ci.user.id != state["user_id"]:
-                    await ci.response.send_message("❌ No es tu menú.", ephemeral=True)
-                    return
-                global global_recipe_count, lobster_madre_active
-                db2 = load_db()
-                user2 = get_user(db2, ci.user.id)
-                lb_idx = next((i for i, f in enumerate(user2.get("figures", [])) if f["key"] == "lobster"), None)
-                if lb_idx is None:
-                    await ci.response.edit_message(content="❌ Ya no tienes langosta.", embed=None, view=None)
-                    return
-                ings2 = user2.get("ingredients", {})
-                for ing in state["selected"]:
-                    if ings2.get(ing, 0) <= 0:
-                        await ci.response.edit_message(content=f"❌ Ya no tienes {ing}.", embed=None, view=None)
-                        return
-                # Consumir langosta e ingredientes
-                user2["figures"].pop(lb_idx)
-                for ing in state["selected"]:
-                    ings2[ing] -= 1
-                user2["ingredients"] = ings2
-                # Buscar receta
-                matched = None
-                for recipe in RECIPES:
-                    if set(recipe["ingredients"]) == set(["🦞"] + state["selected"]):
-                        matched = recipe
-                        break
-                # Verificar hojas de receta conocidas
-                if not matched:
-                    for idx in user2.get("recipe_sheets", []):
-                        if idx < len(RECIPES):
-                            recipe = RECIPES[idx]
-                            if set(recipe["ingredients"]) == set(["🦞"] + state["selected"]):
-                                matched = recipe
-                                break
-                global_recipe_count += 1
-                user2["recipe_count"] = user2.get("recipe_count", 0) + 1
-                # Logros de receta
-                new_achs = check_achievements(user2, {"action": "cook"})
-                if new_achs:
-                    ach_names = [ACHIEVEMENTS[a]["name"] for a in new_achs]
-                    await interaction.followup.send(f"🏅 ¡Logro desbloqueado! {' · '.join(ach_names)}", ephemeral=True)
-                # XP al jugador por cocinar
-                user2["xp"] = user2.get("xp", 0) + 20
-                _check_player_levelup(user2)
-                if matched:
-                    if "buffs" not in user2:
-                        user2["buffs"] = []
-                    user2["buffs"].append({"effect": matched["effect"], "value": matched["value"], "turns": matched["turns"]})
-                    if matched["effect"] == "level_fig":
-                        team = user2.get("team", [])
-                        if team and team[0] is not None and team[0] < len(user2.get("figures", [])):
-                            fig = user2["figures"][team[0]]
-                            if fig.get("level", 1) < FIGURE_LEVEL_MAX:
-                                fig["level"] = fig.get("level", 1) + 1
-                    recipe_name = matched["name"]
-                    result_desc = matched["desc"]
-                    color = 0x2ecc71
-                else:
-                    recipe_name = "💀 Receta Fallida"
-                    result_desc = "Los ingredientes no tienen sinergia entre sí... Se arruinó la comida. No obtienes ningún beneficio.\n\n💡 _Tip: explora para encontrar Hojas de Receta._"
-                    color = 0xe74c3c
-                save_db(db2)
-                embed2 = discord.Embed(title=f"{'✅' if matched else '❌'} {recipe_name}", description=result_desc, color=color)
-                embed2.set_footer(text=f"Recetas globales: {global_recipe_count}/{TOTAL_RECIPES_FOR_EVENT}")
-                await ci.response.edit_message(embed=embed2, view=None)
-                if global_recipe_count >= TOTAL_RECIPES_FOR_EVENT and not lobster_madre_active:
-                    lobster_madre_active = True
-                    await trigger_lobster_madre(ci.channel)
-            cook_btn.callback = do_cook
-            view.add_item(cook_btn)
-
-        return view
-
-    await interaction.response.send_message(embed=make_embed(), view=make_view(), ephemeral=True)
 
 # ─── LANGOSTA MADRE (evento global) ───────────────────────────────────────────
 LOBSTER_MADRE_HP = 300000
@@ -942,66 +642,6 @@ async def prompt_stat_up(interaction: discord.Interaction, fig_data: dict, fig_k
 # ============================================================
 #  LEADERBOARDS EXPANDIDOS
 # ============================================================
-@bot.tree.command(name="leaderboard", description="Ver los rankings del servidor")
-async def leaderboard_cmd(interaction: discord.Interaction):
-    view = discord.ui.View(timeout=60)
-
-@bot.tree.command(name="verperfil", description="Ver el perfil de otro usuario")
-@app_commands.describe(usuario="El usuario cuyo perfil quieres ver")
-async def ver_perfil(interaction: discord.Interaction, usuario: discord.Member):
-    db = load_db()
-    u = get_user(db, usuario.id)
-    if not u:
-        await interaction.response.send_message(f"❌ {usuario.display_name} no está registrado.", ephemeral=True)
-        return
-    total = u.get("wins", 0) + u.get("losses", 0)
-    wr = round(u["wins"] / total * 100, 1) if total > 0 else 0
-    lvl = u.get("level", 1)
-    xp = u.get("xp", 0)
-    needed = xp_to_level_up(lvl)
-    embed = discord.Embed(title=f"👤 Perfil de {u['name']}", color=0x3498db)
-    embed.add_field(name="🏆 Nivel", value=lvl, inline=True)
-    embed.add_field(name="✨ XP", value=f"{xp}/{needed}", inline=True)
-    embed.add_field(name="💰 Monedas", value=f"{u.get('coins',0):,}", inline=True)
-    embed.add_field(name="✅ Victorias", value=u.get("wins", 0), inline=True)
-    embed.add_field(name="❌ Derrotas", value=u.get("losses", 0), inline=True)
-    embed.add_field(name="📊 Win Rate", value=f"{wr}%", inline=True)
-    embed.add_field(name="🎭 Figuras", value=len(u.get("figures", [])), inline=True)
-    team_keys = [u.get("figures", [])[i]["key"] if i < len(u.get("figures", [])) else None
-                 for i in (u.get("team", [None, None, None]) or [None, None, None])]
-    team_str = " | ".join(FIGURES[k]["emoji"] + " " + FIGURES[k]["name"] if k and k in FIGURES else "—" for k in team_keys)
-    embed.add_field(name="⚔️ Equipo activo", value=team_str or "—", inline=False)
-    await interaction.response.send_message(embed=embed)
-
-@bot.tree.command(name="verfiguras", description="Ver las figuras de otro usuario")
-@app_commands.describe(usuario="El usuario cuyas figuras quieres ver")
-async def ver_figuras(interaction: discord.Interaction, usuario: discord.Member):
-    db = load_db()
-    u = get_user(db, usuario.id)
-    if not u or not u.get("figures"):
-        await interaction.response.send_message(f"❌ {usuario.display_name} no tiene figuras o no está registrado.", ephemeral=True)
-        return
-    embed = discord.Embed(title=f"🎭 Figuras de {u['name']}", color=0x9b59b6)
-    seen = {}
-    for fd in u["figures"]:
-        k = fd.get("key")
-        if k not in seen or fd.get("level", 1) > seen[k].get("level", 1):
-            seen[k] = fd
-    for k, fd in seen.items():
-        fig = FIGURES.get(k)
-        if not fig:
-            continue
-        lvl = fd.get("level", 1)
-        xp = fd.get("xp", 0)
-        stat_ups = fd.get("stat_ups", {})
-        sup_str = " ".join(f"+{v}{s}" for s, v in stat_ups.items()) if stat_ups else ""
-        embed.add_field(
-            name=f"{fig['emoji']} {fig['name']} Nv.{lvl}",
-            value=f"❤️{apply_level_bonus(fig['hp'],lvl)+stat_ups.get('hp',0)} ⚔️{apply_level_bonus(fig['attack'],lvl)+stat_ups.get('attack',0)} 🛡️{apply_level_bonus(fig['defense'],lvl)+stat_ups.get('defense',0)} ⚡{apply_level_bonus(fig['speed'],lvl)+stat_ups.get('speed',0)}\nXP: {xp}/{xp_to_level_up(lvl)} {sup_str}",
-            inline=True
-        )
-    await interaction.response.send_message(embed=embed)
-
 # ============================================================
 #  SISTEMA DE MISIONES (/quest)
 # ============================================================
@@ -1049,57 +689,6 @@ async def check_quest_drops(user: dict, quest_id: str, channel, db=None):
                 user["jane_unlocked"] = True
             if db: save_db(db)
             await channel.send(f"🎉 **¡MISIÓN COMPLETADA!** {quest['name']}\n{quest['reward_desc']}\n¡Ya puedes comprar a Jane Doe en la `/tienda`!")
-
-@bot.tree.command(name="quest", description="Ver y activar misiones disponibles")
-async def quest_cmd(interaction: discord.Interaction):
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-
-    embed = discord.Embed(title="📋 Misiones disponibles", color=0xe67e22)
-    view = discord.ui.View(timeout=60)
-
-    for qid, quest in QUESTS.items():
-        completed = is_quest_unlocked(user, qid)
-        active = qid in user.get("active_quests", [])
-        prog = get_quest_progress(user, qid)
-        goal = quest["goal"]
-
-        if completed:
-            status = f"✅ Completada"
-        elif active:
-            status = f"🔄 En progreso: {prog}/{goal}"
-        else:
-            status = "❌ Inactiva"
-
-        embed.add_field(
-            name=f"{quest['name']} — {status}",
-            value=f"{quest['desc']}\n**Recompensa:** {quest['reward_desc']}",
-            inline=False
-        )
-
-        if not completed and not active:
-            btn = discord.ui.Button(label=f"Activar: {quest['name']}", style=discord.ButtonStyle.success, custom_id=f"quest_{qid}")
-            def make_activate(quest_id, quest_name):
-                async def activate(inter: discord.Interaction):
-                    if inter.user.id != interaction.user.id:
-                        await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
-                        return
-                    db2 = load_db()
-                    u2 = get_user(db2, inter.user.id)
-                    if "active_quests" not in u2:
-                        u2["active_quests"] = []
-                    if quest_id not in u2["active_quests"]:
-                        u2["active_quests"].append(quest_id)
-                    save_db(db2)
-                    await inter.response.send_message(f"✅ ¡Misión **{quest_name}** activada! Gana batallas para progresar.", ephemeral=True)
-                return activate
-            btn.callback = make_activate(qid, quest["name"])
-            view.add_item(btn)
-
-    await interaction.response.send_message(embed=embed, view=view)
 
 # ============================================================
 #  SISTEMA DE EXPLORACIÓN (/exploracion)
@@ -1160,207 +749,6 @@ def pick_exploration_reward(user: dict) -> dict:
                     return {"type": "coins", "desc": "💰 +200 monedas (sin figuras disponibles)"}
     return {"type": "nothing", "desc": "Nada especial..."}
 
-@bot.tree.command(name="exploracion", description="Manda 3 figuras a explorar (30 min) para conseguir recompensas")
-async def exploracion_cmd(interaction: discord.Interaction):
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-
-    # Ver si ya hay exploración activa
-    exp = user.get("exploration")
-    now = time.time()
-    if exp and now < exp.get("end_time", 0):
-        remaining = int(exp["end_time"] - now)
-        m, s = divmod(remaining, 60)
-        fig_names = [FIGURES.get(k, {}).get("name", k) for k in exp.get("fig_keys", [])]
-        embed = discord.Embed(
-            title="🗺️ Exploración en curso",
-            description=f"Tus figuras **{', '.join(fig_names)}** regresan en **{m}m {s}s**.",
-            color=0x2ecc71
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return
-
-    # Recoger resultados si ya terminó
-    if exp and now >= exp.get("end_time", 0):
-        rewards = []
-        db2 = load_db()
-        u2 = get_user(db2, interaction.user.id)
-        for fig_key in exp.get("fig_keys", []):
-            reward = pick_exploration_reward(u2)
-            rewards.append(reward)
-            # XP a las figuras exploradoras
-            for fd in u2.get("figures", []):
-                if fd.get("key") == fig_key:
-                    fd["xp"] = fd.get("xp", 0) + 60
-                    if check_figure_levelup(fd):
-                        pass
-                    break
-        # XP al jugador por explorar
-        u2["xp"] = u2.get("xp", 0) + 30
-        _check_player_levelup(u2)
-        u2["exploration"] = None
-        save_db(db2)
-        embed = discord.Embed(
-            title="🎒 ¡Tu equipo regresó de la exploración!",
-            description=f"Estuvieron fuera **30 minutos** y esto encontraron:",
-            color=0xf1c40f
-        )
-        total_coins = 0
-        total_ings = []
-        total_figs = []
-        for i, r in enumerate(rewards):
-            fig_key = exp["fig_keys"][i] if i < len(exp["fig_keys"]) else "?"
-            fig_name = FIGURES.get(fig_key, {}).get("name", fig_key)
-            embed.add_field(name=f"🗺️ {fig_name} encontró:", value=r["desc"], inline=False)
-            if r["type"] == "coins":
-                total_coins += int(r["desc"].replace("💰 +","").replace(" monedas","").replace(",","") if "monedas" in r["desc"] else 0)
-            elif r["type"] == "ingredient":
-                total_ings.append(r["desc"])
-            elif r["type"] == "figure":
-                total_figs.append(r["desc"])
-
-        if total_coins > 0:
-            embed.add_field(name="💰 Total monedas", value=f"+{total_coins:,}🪙", inline=True)
-        if total_ings:
-            embed.add_field(name="🧺 Ingredientes", value="\n".join(total_ings), inline=True)
-        if total_figs:
-            embed.add_field(name="🎭 Figuras", value="\n".join(total_figs), inline=True)
-        embed.set_footer(text="Usa /exploracion de nuevo para mandar a explorar!")
-        await interaction.response.send_message(embed=embed)
-        return
-
-    # Elegir figuras para explorar
-    figs = user.get("figures", [])
-    exploring_keys = [f["key"] for f in (user.get("exploration", {}) or {}).get("fig_keys", [])]
-    team_indices = user.get("team", [])
-
-    # Filtrar figuras disponibles (no en exploración activa)
-    available_figs = []
-    seen_keys = set()
-    for i, fd in enumerate(figs):
-        k = fd.get("key")
-        if k and k not in seen_keys and k not in exploring_keys:
-            seen_keys.add(k)
-            available_figs.append((i, fd))
-
-    if len(available_figs) < 1:
-        await interaction.response.send_message("❌ No tienes figuras disponibles para explorar.", ephemeral=True)
-        return
-
-    options = []
-    for idx, fd in available_figs[:25]:
-        fig = FIGURES.get(fd["key"])
-        if fig:
-            raw_emoji = fig["emoji"]
-            emoji_obj = discord.PartialEmoji.from_str(raw_emoji) if raw_emoji.startswith("<") else raw_emoji
-            opt = discord.SelectOption(
-                label=f"{fig['name']} Nv.{fd.get('level',1)}",
-                value=fd["key"],
-                description=f"{fig['rarity'].upper()} | HP:{fig['hp']} ATK:{fig['attack']}"
-            )
-            try:
-                opt.emoji = emoji_obj
-            except Exception:
-                pass
-            options.append(opt)
-
-    state = {"selected": [], "user_id": interaction.user.id}
-
-    async def show_exp_menu(inter, is_first=False):
-        embed = discord.Embed(
-            title="🗺️ Preparar Exploración",
-            description=f"Elige hasta 3 figuras para explorar **(30 minutos)**.\nNo podrán batallar durante la exploración.\n\nSeleccionadas: **{', '.join(FIGURES.get(k,{}).get('name',k) for k in state['selected']) or 'Ninguna'}**",
-            color=0x2ecc71
-        )
-        view = discord.ui.View(timeout=60)
-        sel = discord.ui.Select(placeholder="Elige una figura...", options=options, max_values=1)
-
-        async def add_fig(si: discord.Interaction):
-            if si.user.id != state["user_id"]:
-                await si.response.send_message("❌ No es tu menú.", ephemeral=True)
-                return
-            k = sel.values[0]
-            if k in state["selected"]:
-                await si.response.send_message("⚠️ Ya seleccionaste esa figura.", ephemeral=True)
-                return
-            if len(state["selected"]) >= 3:
-                await si.response.send_message("❌ Máximo 3 figuras.", ephemeral=True)
-                return
-            state["selected"].append(k)
-            new_embed = discord.Embed(
-                title="🗺️ Preparar Exploración",
-                description=f"Seleccionadas: **{', '.join(FIGURES.get(k2,{}).get('name',k2) for k2 in state['selected'])}**\n\nAñade más o pulsa **¡Explorar!**",
-                color=0x2ecc71
-            )
-            await si.response.edit_message(embed=new_embed, view=build_exp_view(state))
-        sel.callback = add_fig
-        view.add_item(sel)
-
-        start_btn = discord.ui.Button(
-            label="🗺️ ¡Explorar!",
-            style=discord.ButtonStyle.success,
-            disabled=len(state["selected"]) == 0
-        )
-        async def start_exp(si: discord.Interaction):
-            if si.user.id != state["user_id"]:
-                await si.response.send_message("❌ No es tu menú.", ephemeral=True)
-                return
-            db2 = load_db()
-            u2 = get_user(db2, si.user.id)
-            end_time = time.time() + EXPLORATION_DURATION
-            u2["exploration"] = {
-                "fig_keys": state["selected"],
-                "end_time": end_time,
-                "started": time.time()
-            }
-            save_db(db2)
-            names = [FIGURES.get(k, {}).get("name", k) for k in state["selected"]]
-            conf_embed = discord.Embed(
-                title="✅ ¡Exploración iniciada!",
-                description=f"**{', '.join(names)}** salieron a explorar.\nRegresarán en **30 minutos**.\nUsa `/exploracion` de nuevo para recoger sus recompensas.",
-                color=0x2ecc71
-            )
-            await si.response.edit_message(embed=conf_embed, view=None)
-        start_btn.callback = start_exp
-        view.add_item(start_btn)
-        return embed, view
-
-    def build_exp_view(st):
-        """Reconstruye el view con los datos actuales."""
-        v = discord.ui.View(timeout=60)
-        sel2 = discord.ui.Select(placeholder="Añadir figura...", options=options, max_values=1)
-        async def add2(si: discord.Interaction):
-            if si.user.id != st["user_id"]: return
-            k = sel2.values[0]
-            if k not in st["selected"] and len(st["selected"]) < 3:
-                st["selected"].append(k)
-            new_embed = discord.Embed(
-                title="🗺️ Preparar Exploración",
-                description=f"Seleccionadas: **{', '.join(FIGURES.get(k2,{}).get('name',k2) for k2 in st['selected'])}**",
-                color=0x2ecc71
-            )
-            await si.response.edit_message(embed=new_embed, view=build_exp_view(st))
-        sel2.callback = add2
-        v.add_item(sel2)
-        sb = discord.ui.Button(label="🗺️ ¡Explorar!", style=discord.ButtonStyle.success)
-        async def do_start(si: discord.Interaction):
-            if si.user.id != st["user_id"]: return
-            db2 = load_db()
-            u2 = get_user(db2, si.user.id)
-            u2["exploration"] = {"fig_keys": st["selected"], "end_time": time.time() + EXPLORATION_DURATION, "started": time.time()}
-            save_db(db2)
-            names = [FIGURES.get(k, {}).get("name", k) for k in st["selected"]]
-            await si.response.edit_message(embed=discord.Embed(title="✅ ¡Exploración iniciada!", description=f"**{', '.join(names)}** salieron. Regresan en 30 min.", color=0x2ecc71), view=None)
-        sb.callback = do_start
-        v.add_item(sb)
-        return v
-
-    embed, view = await show_exp_menu(interaction, is_first=True)
-    await interaction.response.send_message(embed=embed, view=view)
-
 # ============================================================
 #  SISTEMA MULTIPLAYER (/multiplayer) — hasta 4 jugadores
 # ============================================================
@@ -1380,207 +768,8 @@ class MultiplayerSession:
         self.log = []
         self.invert_event_active = False  # evento de inversión
 
-@bot.tree.command(name="multiplayer", description="Crea una batalla multijugador (2-4 jugadores)")
-async def multiplayer_cmd(interaction: discord.Interaction):
-    channel_id = interaction.channel_id
-    if channel_id in active_multiplayer:
-        await interaction.response.send_message("❌ Ya hay una partida multijugador en este canal.", ephemeral=True)
-        return
-    if channel_id in active_battles:
-        await interaction.response.send_message("❌ Ya hay una batalla activa. Usa `/reset` primero.", ephemeral=True)
-        return
-@bot.tree.command(name="subirstat", description="Elige qué stat subir en tus figuras con nivel pendiente")
-async def subir_stat_cmd(interaction: discord.Interaction):
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-
-    # Buscar figuras con pending
-    pending_figs = [(i, fd) for i, fd in enumerate(user.get("figures", [])) if fd.get("pending_stat_up", 0) > 0]
-    if not pending_figs:
-        await interaction.response.send_message("✅ No hay figuras esperando subir stat.", ephemeral=True)
-        return
-
-    idx, fd = pending_figs[0]
-    fig = FIGURES.get(fd["key"], {})
-    fig_name = fig.get("name", fd["key"])
-    fig_emoji = fig.get("emoji", "🎭")
-    lvl = fd.get("level", 1)
-
-    embed = discord.Embed(
-        title=f"⬆️ {fig_emoji} {fig_name} — Nv.{lvl}",
-        description=f"Tienes **{fd['pending_stat_up']}** punto(s) de stat pendiente.\n¿Qué stat quieres subir **+2**?",
-        color=0xf1c40f
-    )
-    view = discord.ui.View(timeout=60)
-    stats = [("hp", "❤️ HP +2"), ("attack", "⚔️ ATK +2"), ("defense", "🛡️ DEF +2"), ("speed", "⚡ VEL +2")]
-
-    for stat_key, label in stats:
-        btn = discord.ui.Button(label=label, style=discord.ButtonStyle.primary)
-        def make_cb(sk, sl, fig_idx):
-            async def cb(inter: discord.Interaction):
-                if inter.user.id != interaction.user.id:
-                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
-                    return
-                db2 = load_db()
-                u2 = get_user(db2, inter.user.id)
-                target_fd = u2["figures"][fig_idx]
-                if "stat_ups" not in target_fd:
-                    target_fd["stat_ups"] = {}
-                target_fd["stat_ups"][sk] = target_fd["stat_ups"].get(sk, 0) + 2
-                target_fd["pending_stat_up"] = max(0, target_fd.get("pending_stat_up", 0) - 1)
-                save_db(db2)
-                result = discord.Embed(
-                    title=f"✅ ¡{FIGURES.get(target_fd['key'],{}).get('emoji','🎭')} {FIGURES.get(target_fd['key'],{}).get('name',target_fd['key'])} mejorado!",
-                    description=f"**{sl}** permanente aplicado. (Nv.{target_fd.get('level',1)})",
-                    color=0x2ecc71
-                )
-                await inter.response.edit_message(embed=result, view=None)
-                # Verificar si quedan más pending
-                if target_fd.get("pending_stat_up", 0) > 0:
-                    await asyncio.sleep(1)
-                    await subir_stat_cmd.callback(inter)
-            return cb
-        btn.callback = make_cb(stat_key, label, idx)
-        view.add_item(btn)
-
-    await interaction.response.send_message(embed=embed, view=view)
-
 # --- SAY (solo matheogamer64) ---
 GAMER_ID = 1236293193893412975
-
-@bot.tree.command(name="say", description="[GAMER] Con este comando, puedes hacer que el bot diga lo que quieras")
-@app_commands.describe(mensaje="Lo que dirá el bot")
-async def say(interaction: discord.Interaction, mensaje: str):
-    if interaction.user.id != GAMER_ID:
-        await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
-@bot.tree.command(name="trade", description="Propone un intercambio de oro, figuras o ingredientes")
-@app_commands.describe(usuario="Usuario con quien hacer el trade")
-async def trade(interaction: discord.Interaction, usuario: discord.Member):
-    if usuario.id == interaction.user.id:
-        await interaction.response.send_message("❌ No puedes tradear contigo mismo.", ephemeral=True)
-        return
-    db = load_db()
-    offerer = get_user(db, interaction.user.id)
-    receiver = get_user(db, usuario.id)
-    if not offerer:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-    if not receiver:
-        await interaction.response.send_message("❌ Ese usuario no está registrado.", ephemeral=True)
-        return
-    if usuario.id in pending_trades:
-        await interaction.response.send_message("❌ Ese usuario ya tiene un trade pendiente.", ephemeral=True)
-        return
-
-    # Estado del trade: lo que ofrece cada lado
-    trade_state = {
-        "offerer_id":  interaction.user.id,
-        "receiver_id": usuario.id,
-        "offer":       {"coins": 0, "figures": [], "ingredients": {}},
-        "request":     {"coins": 0, "figures": [], "ingredients": {}},
-        "confirmed":   {"offerer": False, "receiver": False},
-    }
-
-    def build_trade_embed():
-        db2 = load_db()
-        o2 = get_user(db2, interaction.user.id)
-        r2 = get_user(db2, usuario.id)
-        embed = discord.Embed(title="🔄 Propuesta de Trade", color=0x3498db)
-
-        def side_value(side):
-            lines = []
-            if trade_state[side]["coins"] > 0:
-                lines.append(f"💰 {trade_state[side]['coins']:,}🪙")
-            for fk in trade_state[side]["figures"]:
-                fig = FIGURES.get(fk, {})
-                lines.append(f"🎭 {fig.get('name', fk)}")
-            for k, v in trade_state[side]["ingredients"].items():
-                if v > 0:
-                    lines.append(f"{k} {INGREDIENTS.get(k,k)} x{v}")
-            return "\n".join(lines) if lines else "_(nada aún)_"
-
-        embed.add_field(name=f"📤 {o2['name']} ofrece", value=side_value("offer"), inline=True)
-        embed.add_field(name=f"📥 {r2['name']} ofrece", value=side_value("request"), inline=True)
-
-        confirmed_str = []
-        if trade_state["confirmed"]["offerer"]: confirmed_str.append(f"✅ {o2['name']}")
-        if trade_state["confirmed"]["receiver"]: confirmed_str.append(f"✅ {r2['name']}")
-        if confirmed_str:
-            embed.set_footer(text="Confirmado por: " + ", ".join(confirmed_str))
-        return embed
-
-    def build_trade_view():
-        view = discord.ui.View(timeout=120)
-
-        # Botón añadir a mi oferta
-        add_offer_btn = discord.ui.Button(label="📤 Añadir a mi oferta", style=discord.ButtonStyle.primary, custom_id="add_offer")
-        # Botón añadir a lo que pido
-        add_req_btn   = discord.ui.Button(label="📥 Añadir lo que pido", style=discord.ButtonStyle.secondary, custom_id="add_req")
-        # Confirmar
-        confirm_btn   = discord.ui.Button(label="✅ Confirmar", style=discord.ButtonStyle.success, custom_id="confirm_trade")
-        # Cancelar
-        cancel_btn    = discord.ui.Button(label="❌ Cancelar", style=discord.ButtonStyle.danger, custom_id="cancel_trade")
-
-        async def add_offer_cb(inter: discord.Interaction):
-            if inter.user.id not in (interaction.user.id, usuario.id):
-                await inter.response.send_message("❌ No eres parte de este trade.", ephemeral=True)
-                return
-            side = "offer" if inter.user.id == interaction.user.id else "request"
-            await show_trade_add_menu(inter, trade_state, side, interaction, usuario, build_trade_view, build_trade_embed)
-
-        async def add_req_cb(inter: discord.Interaction):
-            if inter.user.id not in (interaction.user.id, usuario.id):
-                await inter.response.send_message("❌ No eres parte de este trade.", ephemeral=True)
-                return
-            side = "request" if inter.user.id == interaction.user.id else "offer"
-            await show_trade_add_menu(inter, trade_state, side, interaction, usuario, build_trade_view, build_trade_embed)
-
-        async def confirm_cb(inter: discord.Interaction):
-            if inter.user.id == interaction.user.id:
-                trade_state["confirmed"]["offerer"] = True
-            elif inter.user.id == usuario.id:
-                trade_state["confirmed"]["receiver"] = True
-            else:
-                await inter.response.send_message("❌ No eres parte de este trade.", ephemeral=True)
-                return
-
-            if trade_state["confirmed"]["offerer"] and trade_state["confirmed"]["receiver"]:
-                # Ejecutar el trade
-                await execute_trade(inter, trade_state, interaction, usuario)
-            else:
-                emb = build_trade_embed()
-                await inter.response.edit_message(embed=emb, view=build_trade_view())
-
-        async def cancel_cb(inter: discord.Interaction):
-            if inter.user.id not in (interaction.user.id, usuario.id):
-                await inter.response.send_message("❌ No eres parte de este trade.", ephemeral=True)
-                return
-            pending_trades.pop(usuario.id, None)
-            cancel_embed = discord.Embed(title="❌ Trade cancelado.", color=0xe74c3c)
-            await inter.response.edit_message(embed=cancel_embed, view=None)
-
-        add_offer_btn.callback = add_offer_cb
-        add_req_btn.callback   = add_req_cb
-        confirm_btn.callback   = confirm_cb
-        cancel_btn.callback    = cancel_cb
-
-        view.add_item(add_offer_btn)
-        view.add_item(add_req_btn)
-        view.add_item(confirm_btn)
-        view.add_item(cancel_btn)
-        return view
-
-    pending_trades[usuario.id] = trade_state
-    emb = build_trade_embed()
-    await interaction.response.send_message(
-        content=f"{usuario.mention} — **{offerer['name']}** quiere hacer un trade contigo!",
-        embed=emb,
-        view=build_trade_view()
-    )
-
 
 async def show_trade_add_menu(inter, trade_state, side, orig_inter, target_member, build_view_fn, build_embed_fn):
     """Muestra el menú para añadir oro/figura/ingrediente al lado del trade."""
@@ -1748,104 +937,6 @@ async def execute_trade(inter: discord.Interaction, trade_state, orig_inter, tar
 # ============================================================
 PLAYER_LEVEL_MAX = 100
 
-@bot.tree.command(name="rebirth", description="Reinicia desde el nivel 1, manteniendo tu árbol de aprendizaje")
-async def rebirth_cmd(interaction: discord.Interaction):
-    db   = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-
-    rb_count = user.get("rebirth_count", 0)
-    cost     = REBIRTH_BASE_COST + rb_count * REBIRTH_COST_INC
-    coins    = user.get("coins", 0)
-    lvl      = user.get("level", 1)
-
-    embed = discord.Embed(
-        title="🔄 REBIRTH",
-        description=(
-            f"¿Estás seguro de que quieres hacer **Rebirth #{rb_count + 1}**?\n\n"
-            f"**Se reiniciará:**\n"
-            f"• Nivel → 1 · XP → 0\n"
-            f"• Skill Points no gastados → 0\n\n"
-            f"**Se conservará:**\n"
-            f"• Tu árbol de aprendizaje\n"
-            f"• Figuras · Monedas · Victorias\n\n"
-            f"💰 Coste: **{cost:,}🪙** | Tienes: **{coins:,}🪙**\n"
-            f"📈 Próximo rebirth costará: **{cost + REBIRTH_COST_INC:,}🪙**"
-        ),
-        color=0xe74c3c
-    )
-
-    if coins < cost:
-        embed.set_footer(text=f"❌ No tienes suficientes monedas. Te faltan {cost - coins:,}🪙.")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return
-
-    view = discord.ui.View(timeout=60)
-    uid  = interaction.user.id
-
-    confirm_btn = discord.ui.Button(label="✅ Confirmar Rebirth", style=discord.ButtonStyle.danger)
-    cancel_btn  = discord.ui.Button(label="❌ Cancelar",          style=discord.ButtonStyle.secondary)
-
-    async def confirm_cb(inter: discord.Interaction):
-        if inter.user.id != uid:
-            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
-            return
-        db2  = load_db()
-        u2   = get_user(db2, inter.user.id)
-        cost2 = REBIRTH_BASE_COST + u2.get("rebirth_count", 0) * REBIRTH_COST_INC
-        if u2.get("coins", 0) < cost2:
-            await inter.response.edit_message(content="❌ Ya no tienes suficiente oro.", embed=None, view=None)
-            return
-        # Preservar
-        tree      = u2.get("learn_tree", {})
-        figures   = u2.get("figures", [])
-        team      = u2.get("team", [None, None, None])
-        wins      = u2.get("wins", 0)
-        losses    = u2.get("losses", 0)
-        rc        = u2.get("recipe_count", 0)
-        name      = u2.get("name", "")
-        active    = u2.get("active_figure")
-        rb_new    = u2.get("rebirth_count", 0) + 1
-        # Resetear
-        u2["level"]         = 1
-        u2["xp"]            = 0
-        u2["skill_points"]  = 0
-        u2["learn_tree"]    = tree       # árbol preservado
-        u2["figures"]       = figures
-        u2["team"]          = team
-        u2["wins"]          = wins
-        u2["losses"]        = losses
-        u2["recipe_count"]  = rc
-        u2["name"]          = name
-        u2["active_figure"] = active
-        u2["coins"]         = u2.get("coins", 0) - cost2
-        u2["rebirth_count"] = rb_new
-        save_db(db2)
-        ok_embed = discord.Embed(
-            title=f"🔄 ¡Rebirth #{rb_new} completado!",
-            description=(
-                f"Has reiniciado al nivel 1.\n"
-                f"Tu árbol de aprendizaje sigue intacto — ¡sigue creciendo!\n"
-                f"💰 Saldo restante: **{u2['coins']:,}🪙**"
-            ),
-            color=0xe74c3c
-        )
-        await inter.response.edit_message(embed=ok_embed, view=None)
-
-    async def cancel_cb(inter: discord.Interaction):
-        if inter.user.id != uid:
-            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
-            return
-        await inter.response.edit_message(content="❌ Rebirth cancelado.", embed=None, view=None)
-
-    confirm_btn.callback = confirm_cb
-    cancel_btn.callback  = cancel_cb
-    view.add_item(confirm_btn)
-    view.add_item(cancel_btn)
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
 # ============================================================
 #  /combine — Fusionar figuras del mismo tipo
 # ============================================================
@@ -1856,164 +947,6 @@ COMBINE_MAX_TIERS = 3     # máximo de mejoras (3 habilidades)
 
 # Cuánto sube cada stat de cada habilidad mejorada (daño/curación/etc)
 SKILL_UPGRADE_BONUS = 15  # +15 de poder por tier
-
-@bot.tree.command(name="combine", description="Fusiona 10 copias de una figura para mejorar sus habilidades")
-async def combine_cmd(interaction: discord.Interaction):
-    db   = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-
-    # Contar copias por tipo de figura
-    fig_counts: dict[str, int] = {}
-    for fd in user.get("figures", []):
-        k = fd.get("key")
-        if k:
-            fig_counts[k] = fig_counts.get(k, 0) + 1
-
-    # Sólo figuras con al menos 10 copias y que aún puedan mejorar
-    combine_upgrades = user.setdefault("combine_upgrades", {})
-    eligible = {
-        k: cnt for k, cnt in fig_counts.items()
-        if cnt >= COMBINE_BATCH and combine_upgrades.get(k, 0) < COMBINE_MAX_TIERS
-    }
-
-    if not eligible:
-        await interaction.response.send_message(
-            "❌ Necesitas al menos **10 copias** de una figura que aún pueda mejorar (máx 3 mejoras por figura).",
-            ephemeral=True
-        )
-        return
-
-    # Mostrar opciones
-    embed = discord.Embed(
-        title="🔀 Combinar Figuras",
-        description=(
-            f"Fusionar **10 copias** de una figura mejora su siguiente habilidad.\n"
-            f"Coste: **{COMBINE_COST}🪙** · Máximo **{COMBINE_MAX_TIERS}** mejoras por figura.\n"
-        ),
-        color=0x9b59b6
-    )
-
-    for k, cnt in list(eligible.items())[:10]:
-        fig      = FIGURES.get(k, {})
-        tier     = combine_upgrades.get(k, 0)
-        skills   = FIGURE_SKILLS.get(k, [])
-        # Para OG GAMER 64 solo contar habilidades de Fase 1
-        if k == "og_gamer64":
-            skills = [sk for sk in skills if sk.get("phase", 1) == 1]
-        next_skill = skills[tier]["name"] if tier < len(skills) else "—"
-        embed.add_field(
-            name=f"{fig.get('emoji','')} {fig.get('name', k)} ×{cnt}",
-            value=f"Mejora {tier+1}/3 → **{next_skill}** (+{SKILL_UPGRADE_BONUS} poder)\nNecesitas: 10 copias · Tienes: {cnt}",
-            inline=False
-        )
-
-    view = discord.ui.View(timeout=120)
-    uid  = interaction.user.id
-
-    for k in list(eligible.keys())[:5]:  # máx 5 botones
-        fig = FIGURES.get(k, {})
-
-        def make_combine_cb(fig_key=k):
-            async def cb(inter: discord.Interaction):
-                if inter.user.id != uid:
-                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
-                    return
-                db2   = load_db()
-                u2    = get_user(db2, inter.user.id)
-                if not u2:
-                    await inter.response.send_message("❌ Error de perfil.", ephemeral=True)
-                    return
-
-                # Re-verificar
-                cnt2  = sum(1 for f in u2.get("figures", []) if f.get("key") == fig_key)
-                cu2   = u2.setdefault("combine_upgrades", {})
-                tier2 = cu2.get(fig_key, 0)
-
-                if cnt2 < COMBINE_BATCH:
-                    await inter.response.send_message(f"❌ Ya no tienes suficientes copias ({cnt2}/10).", ephemeral=True)
-                    return
-                if tier2 >= COMBINE_MAX_TIERS:
-                    await inter.response.send_message("❌ Esta figura ya alcanzó el máximo de mejoras.", ephemeral=True)
-                    return
-                if u2.get("coins", 0) < COMBINE_COST:
-                    await inter.response.send_message(f"❌ No tienes suficiente oro. Necesitas {COMBINE_COST}🪙.", ephemeral=True)
-                    return
-
-                # Cobrar y eliminar 10 copias (excepto la primera del equipo)
-                u2["coins"] -= COMBINE_COST
-                team_indices = u2.get("team", [])
-                team_fig_keys = [u2["figures"][i]["key"] if i is not None and i < len(u2["figures"]) else None for i in team_indices]
-                removed = 0
-                new_figures = []
-                kept_one = False
-                for fd in u2["figures"]:
-                    if fd.get("key") == fig_key and removed < COMBINE_BATCH:
-                        if not kept_one:
-                            new_figures.append(fd)
-                            kept_one = True
-                        else:
-                            removed += 1
-                    else:
-                        new_figures.append(fd)
-                u2["figures"] = new_figures
-
-                # Reasignar índices del equipo (pueden haber cambiado)
-                new_team = []
-                for ti in team_indices:
-                    if ti is None:
-                        new_team.append(None)
-                    else:
-                        # Buscar el índice nuevo de esa clave
-                        key_at = None
-                        for ni, nf in enumerate(u2["figures"]):
-                            if nf.get("key") == (u2["figures"][ti]["key"] if ti < len(u2["figures"]) else None):
-                                key_at = ni
-                                break
-                        new_team.append(key_at)
-                u2["team"] = new_team
-
-                # Aplicar mejora
-                cu2[fig_key] = tier2 + 1
-                new_tier = tier2 + 1
-
-                # Guardar el bonus de la habilidad mejorada
-                skill_upgrades = u2.setdefault("skill_upgrades", {})
-                skill_upgrades.setdefault(fig_key, {})[tier2] = SKILL_UPGRADE_BONUS
-
-                save_db(db2)
-
-                fig2      = FIGURES.get(fig_key, {})
-                skills2   = FIGURE_SKILLS.get(fig_key, [])
-                if fig_key == "og_gamer64":
-                    skills2 = [sk for sk in skills2 if sk.get("phase", 1) == 1]
-                up_skill  = skills2[tier2]["name"] if tier2 < len(skills2) else "???"
-
-                ok_embed = discord.Embed(
-                    title=f"✅ ¡{fig2.get('emoji','')} {fig2.get('name', fig_key)} mejorada!",
-                    description=(
-                        f"10 copias fusionadas.\n"
-                        f"🔺 **{up_skill}** +{SKILL_UPGRADE_BONUS} de poder\n"
-                        f"Mejora **{new_tier}/{COMBINE_MAX_TIERS}** aplicada."
-                        + (f"\n⛔ Combinación bloqueada para esta figura." if new_tier >= COMBINE_MAX_TIERS else "")
-                    ),
-                    color=0x9b59b6
-                )
-                await inter.response.edit_message(embed=ok_embed, view=None)
-            return cb
-
-        btn = discord.ui.Button(
-            label=f"{fig.get('emoji','')} {fig.get('name', k)}",
-            style=discord.ButtonStyle.primary,
-            custom_id=f"combine_{k}"
-        )
-        btn.callback = make_combine_cb()
-        view.add_item(btn)
-
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
 
 # ============================================================
 #  SISTEMA DE 6 TIENDAS CON RAREZA
@@ -2027,163 +960,1253 @@ def _shop_pool(rarities: list[str]) -> list[str]:
             and k not in SECRET_FIGURES
             and k != "roblox_boss"]
 
-@bot.tree.command(name="learn", description="Gasta Skill Points para mejorar tu árbol de habilidades")
-async def learn_cmd(interaction: discord.Interaction):
-    db   = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
+# ============================================================
+#  /rebirth — Reinicio con árbol preservado
 
-    uid = interaction.user.id
 
-    def build_learn_embed(user_data):
-        sp   = user_data.get("skill_points", 0)
-        tree = user_data.get("learn_tree", {})
+def register_commands(bot):
+    """Registra los comandos slash de este módulo. Llamar desde main.py."""
+
+    @bot.tree.command(name="lobster", description="🦞 Obtén una langosta misteriosa")
+    async def lobster_cmd(interaction: discord.Interaction):
+        db = load_db()
+        user = get_user(db, interaction.user.id)
+        if not user:
+            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+
+        user["figures"].append({"key": "lobster", "level": 1, "xp": 0})
+        # Añadir al equipo si hay hueco
+        team = user.get("team", [None, None, None])
+        while len(team) < 3: team.append(None)
+        for i in range(3):
+            if team[i] is None:
+                team[i] = len(user["figures"]) - 1
+                break
+        user["team"] = team
+        save_db(db)
+
         embed = discord.Embed(
-            title="📚 Árbol de Aprendizaje",
-            description=f"✨ **{sp} Skill Points** disponibles\nElige un nodo para invertir un SP.",
+            title="🦞 Una langosta ha aparecido",
+            description="No sabes de dónde vino. No sabes qué quiere.\nPero ahora es tuya.",
+            color=0xe74c3c
+        )
+        embed.add_field(name="❤️ Vida", value="1", inline=True)
+        embed.add_field(name="⚔️ Ataque", value="1", inline=True)
+        embed.add_field(name="🛡️ Defensa", value="1", inline=True)
+        embed.add_field(
+            name="✨ Habilidad: LOBSTER",
+            value="No hace nada.\nO eso crees. Tiene un **0.01%** de matar a todas las figuras enemigas.",
+            inline=False
+        )
+        embed.set_footer(text="Úsala con /equipar. Buena suerte.")
+        await interaction.response.send_message(embed=embed)
+
+
+    @bot.tree.command(name="rob", description="Intenta robarle monedas a otro usuario")
+    @app_commands.describe(usuario="Usuario al que intentar robar")
+    async def rob(interaction: discord.Interaction, usuario: discord.Member):
+        if usuario.id == interaction.user.id:
+            await interaction.response.send_message("❌ No puedes robarte a ti mismo.", ephemeral=True)
+            return
+
+        now = datetime.now(timezone.utc).timestamp()
+        cd_key = interaction.user.id
+        if cd_key in ROB_COOLDOWN:
+            diff = now - ROB_COOLDOWN[cd_key]
+            if diff < 600:  # 10 minutos
+                restante = int(600 - diff)
+                m = restante // 60
+                s = restante % 60
+                await interaction.response.send_message(
+                    f"⏰ Cooldown activo. Puedes robar de nuevo en **{m}m {s}s**.", ephemeral=True
+                )
+                return
+
+        db = load_db()
+        robber = get_user(db, interaction.user.id)
+        victim = get_user(db, usuario.id)
+
+        if not robber:
+            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+        if not victim:
+            await interaction.response.send_message("❌ Ese usuario no está registrado.", ephemeral=True)
+            return
+        if victim.get("coins", 0) <= 0:
+            await interaction.response.send_message("❌ Ese usuario no tiene monedas que robar.", ephemeral=True)
+            return
+
+        ROB_COOLDOWN[cd_key] = now
+
+        roll = random.randint(1, 100)
+        if roll <= 10:       # 10% — robo grande
+            pct = random.uniform(0.30, 0.50)
+            result = "grande"
+        elif roll <= 35:     # 25% — robo mediano
+            pct = random.uniform(0.10, 0.29)
+            result = "mediano"
+        elif roll <= 60:     # 25% — robo pequeño
+            pct = random.uniform(0.01, 0.09)
+            result = "pequeño"
+        else:                # 40% — fallo
+            result = "fallo"
+            pct = 0
+
+        embed = discord.Embed(color=0x9b59b6)
+        if result == "fallo":
+            embed.title = "🚨 ¡Te atraparon!"
+            embed.description = f"Intentaste robarle a **{victim['name']}** pero te pillaron con las manos en la masa. ¡Qué vergüenza!"
+            fine = min(victim.get("coins",0), random.randint(20, 80))
+            robber["coins"] = max(0, robber.get("coins",0) - fine)
+            embed.add_field(name="💸 Multa", value=f"-**{fine:,}** monedas por torpe", inline=True)
+        else:
+            stolen = max(1, int(victim.get("coins", 0) * pct))
+            victim["coins"]  = max(0, victim.get("coins",0) - stolen)
+            robber["coins"]  = robber.get("coins",0) + stolen
+            icons = {"grande":"💰💰💰", "mediano":"💰💰", "pequeño":"💰"}
+            embed.title = f"🦹 ¡Robo {icons[result]} exitoso!"
+            embed.description = f"Le robaste a **{victim['name']}** sin que se diera cuenta."
+            embed.add_field(name="💰 Robado", value=f"+**{stolen:,}** monedas", inline=True)
+            embed.add_field(name="📊 Tipo", value=result.capitalize(), inline=True)
+            embed.add_field(name="💳 Tu saldo", value=f"**{robber['coins']:,}**", inline=True)
+
+        save_db(db)
+        embed.set_footer(text="Cooldown: 2 horas")
+        await interaction.response.send_message(embed=embed)
+
+
+    @bot.tree.command(name="work", description="Trabaja para ganar monedas con un minijuego")
+    async def work(interaction: discord.Interaction):
+        db = load_db()
+        user = get_user(db, interaction.user.id)
+        if not user:
+            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+
+        now = datetime.now(timezone.utc).timestamp()
+        if interaction.user.id in WORK_COOLDOWN:
+            diff = now - WORK_COOLDOWN[interaction.user.id]
+            if diff < WORK_COOLDOWN_SECS:
+                restante = int(WORK_COOLDOWN_SECS - diff)
+                m = restante // 60
+                s = restante % 60
+                await interaction.response.send_message(
+                    f"⏰ Ya trabajaste hoy. Descansa **{m}m {s}s** más.", ephemeral=True
+                )
+                return
+
+        # Elegir trabajo
+        embed = discord.Embed(
+            title="💼 ¿En qué quieres trabajar hoy?",
+            description="Elige tu trabajo y demuestra lo que vales:",
+            color=0x2ecc71
+        )
+        embed.add_field(name="🍔 Preparar Hamburguesas", value="Secuencia de botones. Recompensa: 80-300🪙", inline=False)
+        embed.add_field(name="🎣 Pescar",                value="Opción múltiple. Recompensa: 50-400🪙",    inline=False)
+        embed.add_field(name="🎬 Crear Videos",          value="Escribe rápido. Recompensa: 100-500🪙",    inline=False)
+
+        view = discord.ui.View(timeout=30)
+        for job_id, label in [("burger","🍔 Hamburguesas"), ("fish","🎣 Pescar"), ("video","🎬 Videos")]:
+            btn = discord.ui.Button(label=label, style=discord.ButtonStyle.primary, custom_id=f"job_{job_id}")
+            btn.callback = make_job_callback(job_id, interaction.user.id)
+            view.add_item(btn)
+
+        await interaction.response.send_message(embed=embed, view=view)
+
+
+    @bot.tree.command(name="ingredientes", description="Ve tus ingredientes de cocina actuales")
+    async def ingredientes_cmd(interaction: discord.Interaction):
+        db = load_db()
+        user = get_user(db, interaction.user.id)
+        if not user:
+            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+        ings = user.get("ingredients", {})
+        # Langosta del inventario de figuras
+        lobster_count = sum(1 for f in user.get("figures", []) if f["key"] == "lobster")
+        embed = discord.Embed(title="🧑‍🍳 Tu despensa", color=0xe67e22)
+        ing_str = ""
+        if lobster_count:
+            ing_str += f"🦞 Langosta x{lobster_count}\n"
+        for emoji, amount in ings.items():
+            name = INGREDIENTS.get(emoji, emoji)
+            ing_str += f"{emoji} {name} x{amount}\n"
+        embed.description = ing_str or "_Sin ingredientes. ¡Gana batallas o consigue una langosta!_"
+        embed.set_footer(text=f"Recetas globales cocinadas: {global_recipe_count}/{TOTAL_RECIPES_FOR_EVENT}")
+        await interaction.response.send_message(embed=embed)
+
+
+    @bot.tree.command(name="cook", description="Cocina una receta combinando una langosta con hasta 3 ingredientes")
+    async def cook_cmd(interaction: discord.Interaction):
+        global global_recipe_count, lobster_madre_active
+        db = load_db()
+        user = get_user(db, interaction.user.id)
+        if not user:
+            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+        lobster_idx = next((i for i, f in enumerate(user.get("figures", [])) if f["key"] == "lobster"), None)
+        if lobster_idx is None:
+            await interaction.response.send_message("❌ Necesitas al menos una 🦞 Langosta. Consíguela con `/lobster`.", ephemeral=True)
+            return
+        ings = user.get("ingredients", {})
+        available = {k: v for k, v in ings.items() if v > 0}
+        if not available:
+            await interaction.response.send_message("❌ No tienes ingredientes. ¡Gana batallas para conseguir algunos!", ephemeral=True)
+            return
+
+        ing_options = [
+            discord.SelectOption(label=f"{INGREDIENTS.get(emoji, emoji)} x{amt}", value=emoji)
+            for emoji, amt in available.items()
+        ]
+        state = {"selected": [], "user_id": interaction.user.id}
+
+        def make_embed():
+            selected_str = " + ".join(state["selected"]) if state["selected"] else "_Ninguno aún_"
+            return discord.Embed(
+                title="🧑‍🍳 ¡Hora de cocinar!",
+                description=f"🦞 Langosta + **{selected_str}**\n\nElige hasta 3 ingredientes y luego **Cocinar**:",
+                color=0xe67e22
+            )
+
+        def make_view():
+            view = discord.ui.View(timeout=60)
+
+            if len(state["selected"]) < 3:
+                sel = discord.ui.Select(placeholder="Añadir ingrediente...", options=ing_options, max_values=1)
+                async def add_ingredient(si: discord.Interaction):
+                    if si.user.id != state["user_id"]:
+                        await si.response.send_message("❌ No es tu menú.", ephemeral=True)
+                        return
+                    state["selected"].append(sel.values[0])
+                    await si.response.edit_message(embed=make_embed(), view=make_view())
+                sel.callback = add_ingredient
+                view.add_item(sel)
+
+            if len(state["selected"]) > 0:
+                undo_btn = discord.ui.Button(label="↩️ Quitar último", style=discord.ButtonStyle.secondary)
+                async def undo(ui: discord.Interaction):
+                    if ui.user.id != state["user_id"]:
+                        await ui.response.send_message("❌ No es tu menú.", ephemeral=True)
+                        return
+                    state["selected"].pop()
+                    await ui.response.edit_message(embed=make_embed(), view=make_view())
+                undo_btn.callback = undo
+                view.add_item(undo_btn)
+
+                cook_btn = discord.ui.Button(label="🍳 ¡Cocinar!", style=discord.ButtonStyle.success)
+                async def do_cook(ci: discord.Interaction):
+                    if ci.user.id != state["user_id"]:
+                        await ci.response.send_message("❌ No es tu menú.", ephemeral=True)
+                        return
+                    global global_recipe_count, lobster_madre_active
+                    db2 = load_db()
+                    user2 = get_user(db2, ci.user.id)
+                    lb_idx = next((i for i, f in enumerate(user2.get("figures", [])) if f["key"] == "lobster"), None)
+                    if lb_idx is None:
+                        await ci.response.edit_message(content="❌ Ya no tienes langosta.", embed=None, view=None)
+                        return
+                    ings2 = user2.get("ingredients", {})
+                    for ing in state["selected"]:
+                        if ings2.get(ing, 0) <= 0:
+                            await ci.response.edit_message(content=f"❌ Ya no tienes {ing}.", embed=None, view=None)
+                            return
+                    # Consumir langosta e ingredientes
+                    user2["figures"].pop(lb_idx)
+                    for ing in state["selected"]:
+                        ings2[ing] -= 1
+                    user2["ingredients"] = ings2
+                    # Buscar receta
+                    matched = None
+                    for recipe in RECIPES:
+                        if set(recipe["ingredients"]) == set(["🦞"] + state["selected"]):
+                            matched = recipe
+                            break
+                    # Verificar hojas de receta conocidas
+                    if not matched:
+                        for idx in user2.get("recipe_sheets", []):
+                            if idx < len(RECIPES):
+                                recipe = RECIPES[idx]
+                                if set(recipe["ingredients"]) == set(["🦞"] + state["selected"]):
+                                    matched = recipe
+                                    break
+                    global_recipe_count += 1
+                    user2["recipe_count"] = user2.get("recipe_count", 0) + 1
+                    # Logros de receta
+                    new_achs = check_achievements(user2, {"action": "cook"})
+                    if new_achs:
+                        ach_names = [ACHIEVEMENTS[a]["name"] for a in new_achs]
+                        await interaction.followup.send(f"🏅 ¡Logro desbloqueado! {' · '.join(ach_names)}", ephemeral=True)
+                    # XP al jugador por cocinar
+                    user2["xp"] = user2.get("xp", 0) + 20
+                    _check_player_levelup(user2)
+                    if matched:
+                        if "buffs" not in user2:
+                            user2["buffs"] = []
+                        user2["buffs"].append({"effect": matched["effect"], "value": matched["value"], "turns": matched["turns"]})
+                        if matched["effect"] == "level_fig":
+                            team = user2.get("team", [])
+                            if team and team[0] is not None and team[0] < len(user2.get("figures", [])):
+                                fig = user2["figures"][team[0]]
+                                if fig.get("level", 1) < FIGURE_LEVEL_MAX:
+                                    fig["level"] = fig.get("level", 1) + 1
+                        recipe_name = matched["name"]
+                        result_desc = matched["desc"]
+                        color = 0x2ecc71
+                    else:
+                        recipe_name = "💀 Receta Fallida"
+                        result_desc = "Los ingredientes no tienen sinergia entre sí... Se arruinó la comida. No obtienes ningún beneficio.\n\n💡 _Tip: explora para encontrar Hojas de Receta._"
+                        color = 0xe74c3c
+                    save_db(db2)
+                    embed2 = discord.Embed(title=f"{'✅' if matched else '❌'} {recipe_name}", description=result_desc, color=color)
+                    embed2.set_footer(text=f"Recetas globales: {global_recipe_count}/{TOTAL_RECIPES_FOR_EVENT}")
+                    await ci.response.edit_message(embed=embed2, view=None)
+                    if global_recipe_count >= TOTAL_RECIPES_FOR_EVENT and not lobster_madre_active:
+                        lobster_madre_active = True
+                        await trigger_lobster_madre(ci.channel)
+                cook_btn.callback = do_cook
+                view.add_item(cook_btn)
+
+            return view
+
+        await interaction.response.send_message(embed=make_embed(), view=make_view(), ephemeral=True)
+
+
+    @bot.tree.command(name="leaderboard", description="Ver los rankings del servidor")
+    async def leaderboard_cmd(interaction: discord.Interaction):
+        view = discord.ui.View(timeout=60)
+
+
+    @bot.tree.command(name="verperfil", description="Ver el perfil de otro usuario")
+    @app_commands.describe(usuario="El usuario cuyo perfil quieres ver")
+    async def ver_perfil(interaction: discord.Interaction, usuario: discord.Member):
+        db = load_db()
+        u = get_user(db, usuario.id)
+        if not u:
+            await interaction.response.send_message(f"❌ {usuario.display_name} no está registrado.", ephemeral=True)
+            return
+        total = u.get("wins", 0) + u.get("losses", 0)
+        wr = round(u["wins"] / total * 100, 1) if total > 0 else 0
+        lvl = u.get("level", 1)
+        xp = u.get("xp", 0)
+        needed = xp_to_level_up(lvl)
+        embed = discord.Embed(title=f"👤 Perfil de {u['name']}", color=0x3498db)
+        embed.add_field(name="🏆 Nivel", value=lvl, inline=True)
+        embed.add_field(name="✨ XP", value=f"{xp}/{needed}", inline=True)
+        embed.add_field(name="💰 Monedas", value=f"{u.get('coins',0):,}", inline=True)
+        embed.add_field(name="✅ Victorias", value=u.get("wins", 0), inline=True)
+        embed.add_field(name="❌ Derrotas", value=u.get("losses", 0), inline=True)
+        embed.add_field(name="📊 Win Rate", value=f"{wr}%", inline=True)
+        embed.add_field(name="🎭 Figuras", value=len(u.get("figures", [])), inline=True)
+        team_keys = [u.get("figures", [])[i]["key"] if i < len(u.get("figures", [])) else None
+                     for i in (u.get("team", [None, None, None]) or [None, None, None])]
+        team_str = " | ".join(FIGURES[k]["emoji"] + " " + FIGURES[k]["name"] if k and k in FIGURES else "—" for k in team_keys)
+        embed.add_field(name="⚔️ Equipo activo", value=team_str or "—", inline=False)
+        await interaction.response.send_message(embed=embed)
+
+
+    @bot.tree.command(name="verfiguras", description="Ver las figuras de otro usuario")
+    @app_commands.describe(usuario="El usuario cuyas figuras quieres ver")
+    async def ver_figuras(interaction: discord.Interaction, usuario: discord.Member):
+        db = load_db()
+        u = get_user(db, usuario.id)
+        if not u or not u.get("figures"):
+            await interaction.response.send_message(f"❌ {usuario.display_name} no tiene figuras o no está registrado.", ephemeral=True)
+            return
+        embed = discord.Embed(title=f"🎭 Figuras de {u['name']}", color=0x9b59b6)
+        seen = {}
+        for fd in u["figures"]:
+            k = fd.get("key")
+            if k not in seen or fd.get("level", 1) > seen[k].get("level", 1):
+                seen[k] = fd
+        for k, fd in seen.items():
+            fig = FIGURES.get(k)
+            if not fig:
+                continue
+            lvl = fd.get("level", 1)
+            xp = fd.get("xp", 0)
+            stat_ups = fd.get("stat_ups", {})
+            sup_str = " ".join(f"+{v}{s}" for s, v in stat_ups.items()) if stat_ups else ""
+            embed.add_field(
+                name=f"{fig['emoji']} {fig['name']} Nv.{lvl}",
+                value=f"❤️{apply_level_bonus(fig['hp'],lvl)+stat_ups.get('hp',0)} ⚔️{apply_level_bonus(fig['attack'],lvl)+stat_ups.get('attack',0)} 🛡️{apply_level_bonus(fig['defense'],lvl)+stat_ups.get('defense',0)} ⚡{apply_level_bonus(fig['speed'],lvl)+stat_ups.get('speed',0)}\nXP: {xp}/{xp_to_level_up(lvl)} {sup_str}",
+                inline=True
+            )
+        await interaction.response.send_message(embed=embed)
+
+
+    @bot.tree.command(name="quest", description="Ver y activar misiones disponibles")
+    async def quest_cmd(interaction: discord.Interaction):
+        db = load_db()
+        user = get_user(db, interaction.user.id)
+        if not user:
+            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+
+        embed = discord.Embed(title="📋 Misiones disponibles", color=0xe67e22)
+        view = discord.ui.View(timeout=60)
+
+        for qid, quest in QUESTS.items():
+            completed = is_quest_unlocked(user, qid)
+            active = qid in user.get("active_quests", [])
+            prog = get_quest_progress(user, qid)
+            goal = quest["goal"]
+
+            if completed:
+                status = f"✅ Completada"
+            elif active:
+                status = f"🔄 En progreso: {prog}/{goal}"
+            else:
+                status = "❌ Inactiva"
+
+            embed.add_field(
+                name=f"{quest['name']} — {status}",
+                value=f"{quest['desc']}\n**Recompensa:** {quest['reward_desc']}",
+                inline=False
+            )
+
+            if not completed and not active:
+                btn = discord.ui.Button(label=f"Activar: {quest['name']}", style=discord.ButtonStyle.success, custom_id=f"quest_{qid}")
+                def make_activate(quest_id, quest_name):
+                    async def activate(inter: discord.Interaction):
+                        if inter.user.id != interaction.user.id:
+                            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                            return
+                        db2 = load_db()
+                        u2 = get_user(db2, inter.user.id)
+                        if "active_quests" not in u2:
+                            u2["active_quests"] = []
+                        if quest_id not in u2["active_quests"]:
+                            u2["active_quests"].append(quest_id)
+                        save_db(db2)
+                        await inter.response.send_message(f"✅ ¡Misión **{quest_name}** activada! Gana batallas para progresar.", ephemeral=True)
+                    return activate
+                btn.callback = make_activate(qid, quest["name"])
+                view.add_item(btn)
+
+        await interaction.response.send_message(embed=embed, view=view)
+
+
+    @bot.tree.command(name="exploracion", description="Manda 3 figuras a explorar (30 min) para conseguir recompensas")
+    async def exploracion_cmd(interaction: discord.Interaction):
+        db = load_db()
+        user = get_user(db, interaction.user.id)
+        if not user:
+            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+
+        # Ver si ya hay exploración activa
+        exp = user.get("exploration")
+        now = time.time()
+        if exp and now < exp.get("end_time", 0):
+            remaining = int(exp["end_time"] - now)
+            m, s = divmod(remaining, 60)
+            fig_names = [FIGURES.get(k, {}).get("name", k) for k in exp.get("fig_keys", [])]
+            embed = discord.Embed(
+                title="🗺️ Exploración en curso",
+                description=f"Tus figuras **{', '.join(fig_names)}** regresan en **{m}m {s}s**.",
+                color=0x2ecc71
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        # Recoger resultados si ya terminó
+        if exp and now >= exp.get("end_time", 0):
+            rewards = []
+            db2 = load_db()
+            u2 = get_user(db2, interaction.user.id)
+            for fig_key in exp.get("fig_keys", []):
+                reward = pick_exploration_reward(u2)
+                rewards.append(reward)
+                # XP a las figuras exploradoras
+                for fd in u2.get("figures", []):
+                    if fd.get("key") == fig_key:
+                        fd["xp"] = fd.get("xp", 0) + 60
+                        if check_figure_levelup(fd):
+                            pass
+                        break
+            # XP al jugador por explorar
+            u2["xp"] = u2.get("xp", 0) + 30
+            _check_player_levelup(u2)
+            u2["exploration"] = None
+            save_db(db2)
+            embed = discord.Embed(
+                title="🎒 ¡Tu equipo regresó de la exploración!",
+                description=f"Estuvieron fuera **30 minutos** y esto encontraron:",
+                color=0xf1c40f
+            )
+            total_coins = 0
+            total_ings = []
+            total_figs = []
+            for i, r in enumerate(rewards):
+                fig_key = exp["fig_keys"][i] if i < len(exp["fig_keys"]) else "?"
+                fig_name = FIGURES.get(fig_key, {}).get("name", fig_key)
+                embed.add_field(name=f"🗺️ {fig_name} encontró:", value=r["desc"], inline=False)
+                if r["type"] == "coins":
+                    total_coins += int(r["desc"].replace("💰 +","").replace(" monedas","").replace(",","") if "monedas" in r["desc"] else 0)
+                elif r["type"] == "ingredient":
+                    total_ings.append(r["desc"])
+                elif r["type"] == "figure":
+                    total_figs.append(r["desc"])
+
+            if total_coins > 0:
+                embed.add_field(name="💰 Total monedas", value=f"+{total_coins:,}🪙", inline=True)
+            if total_ings:
+                embed.add_field(name="🧺 Ingredientes", value="\n".join(total_ings), inline=True)
+            if total_figs:
+                embed.add_field(name="🎭 Figuras", value="\n".join(total_figs), inline=True)
+            embed.set_footer(text="Usa /exploracion de nuevo para mandar a explorar!")
+            await interaction.response.send_message(embed=embed)
+            return
+
+        # Elegir figuras para explorar
+        figs = user.get("figures", [])
+        exploring_keys = [f["key"] for f in (user.get("exploration", {}) or {}).get("fig_keys", [])]
+        team_indices = user.get("team", [])
+
+        # Filtrar figuras disponibles (no en exploración activa)
+        available_figs = []
+        seen_keys = set()
+        for i, fd in enumerate(figs):
+            k = fd.get("key")
+            if k and k not in seen_keys and k not in exploring_keys:
+                seen_keys.add(k)
+                available_figs.append((i, fd))
+
+        if len(available_figs) < 1:
+            await interaction.response.send_message("❌ No tienes figuras disponibles para explorar.", ephemeral=True)
+            return
+
+        options = []
+        for idx, fd in available_figs[:25]:
+            fig = FIGURES.get(fd["key"])
+            if fig:
+                raw_emoji = fig["emoji"]
+                emoji_obj = discord.PartialEmoji.from_str(raw_emoji) if raw_emoji.startswith("<") else raw_emoji
+                opt = discord.SelectOption(
+                    label=f"{fig['name']} Nv.{fd.get('level',1)}",
+                    value=fd["key"],
+                    description=f"{fig['rarity'].upper()} | HP:{fig['hp']} ATK:{fig['attack']}"
+                )
+                try:
+                    opt.emoji = emoji_obj
+                except Exception:
+                    pass
+                options.append(opt)
+
+        state = {"selected": [], "user_id": interaction.user.id}
+
+        async def show_exp_menu(inter, is_first=False):
+            embed = discord.Embed(
+                title="🗺️ Preparar Exploración",
+                description=f"Elige hasta 3 figuras para explorar **(30 minutos)**.\nNo podrán batallar durante la exploración.\n\nSeleccionadas: **{', '.join(FIGURES.get(k,{}).get('name',k) for k in state['selected']) or 'Ninguna'}**",
+                color=0x2ecc71
+            )
+            view = discord.ui.View(timeout=60)
+            sel = discord.ui.Select(placeholder="Elige una figura...", options=options, max_values=1)
+
+            async def add_fig(si: discord.Interaction):
+                if si.user.id != state["user_id"]:
+                    await si.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                k = sel.values[0]
+                if k in state["selected"]:
+                    await si.response.send_message("⚠️ Ya seleccionaste esa figura.", ephemeral=True)
+                    return
+                if len(state["selected"]) >= 3:
+                    await si.response.send_message("❌ Máximo 3 figuras.", ephemeral=True)
+                    return
+                state["selected"].append(k)
+                new_embed = discord.Embed(
+                    title="🗺️ Preparar Exploración",
+                    description=f"Seleccionadas: **{', '.join(FIGURES.get(k2,{}).get('name',k2) for k2 in state['selected'])}**\n\nAñade más o pulsa **¡Explorar!**",
+                    color=0x2ecc71
+                )
+                await si.response.edit_message(embed=new_embed, view=build_exp_view(state))
+            sel.callback = add_fig
+            view.add_item(sel)
+
+            start_btn = discord.ui.Button(
+                label="🗺️ ¡Explorar!",
+                style=discord.ButtonStyle.success,
+                disabled=len(state["selected"]) == 0
+            )
+            async def start_exp(si: discord.Interaction):
+                if si.user.id != state["user_id"]:
+                    await si.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                db2 = load_db()
+                u2 = get_user(db2, si.user.id)
+                end_time = time.time() + EXPLORATION_DURATION
+                u2["exploration"] = {
+                    "fig_keys": state["selected"],
+                    "end_time": end_time,
+                    "started": time.time()
+                }
+                save_db(db2)
+                names = [FIGURES.get(k, {}).get("name", k) for k in state["selected"]]
+                conf_embed = discord.Embed(
+                    title="✅ ¡Exploración iniciada!",
+                    description=f"**{', '.join(names)}** salieron a explorar.\nRegresarán en **30 minutos**.\nUsa `/exploracion` de nuevo para recoger sus recompensas.",
+                    color=0x2ecc71
+                )
+                await si.response.edit_message(embed=conf_embed, view=None)
+            start_btn.callback = start_exp
+            view.add_item(start_btn)
+            return embed, view
+
+        def build_exp_view(st):
+            """Reconstruye el view con los datos actuales."""
+            v = discord.ui.View(timeout=60)
+            sel2 = discord.ui.Select(placeholder="Añadir figura...", options=options, max_values=1)
+            async def add2(si: discord.Interaction):
+                if si.user.id != st["user_id"]: return
+                k = sel2.values[0]
+                if k not in st["selected"] and len(st["selected"]) < 3:
+                    st["selected"].append(k)
+                new_embed = discord.Embed(
+                    title="🗺️ Preparar Exploración",
+                    description=f"Seleccionadas: **{', '.join(FIGURES.get(k2,{}).get('name',k2) for k2 in st['selected'])}**",
+                    color=0x2ecc71
+                )
+                await si.response.edit_message(embed=new_embed, view=build_exp_view(st))
+            sel2.callback = add2
+            v.add_item(sel2)
+            sb = discord.ui.Button(label="🗺️ ¡Explorar!", style=discord.ButtonStyle.success)
+            async def do_start(si: discord.Interaction):
+                if si.user.id != st["user_id"]: return
+                db2 = load_db()
+                u2 = get_user(db2, si.user.id)
+                u2["exploration"] = {"fig_keys": st["selected"], "end_time": time.time() + EXPLORATION_DURATION, "started": time.time()}
+                save_db(db2)
+                names = [FIGURES.get(k, {}).get("name", k) for k in st["selected"]]
+                await si.response.edit_message(embed=discord.Embed(title="✅ ¡Exploración iniciada!", description=f"**{', '.join(names)}** salieron. Regresan en 30 min.", color=0x2ecc71), view=None)
+            sb.callback = do_start
+            v.add_item(sb)
+            return v
+
+        embed, view = await show_exp_menu(interaction, is_first=True)
+        await interaction.response.send_message(embed=embed, view=view)
+
+
+    @bot.tree.command(name="multiplayer", description="Crea una batalla multijugador (2-4 jugadores)")
+    async def multiplayer_cmd(interaction: discord.Interaction):
+        channel_id = interaction.channel_id
+        if channel_id in active_multiplayer:
+            await interaction.response.send_message("❌ Ya hay una partida multijugador en este canal.", ephemeral=True)
+            return
+        if channel_id in active_battles:
+            await interaction.response.send_message("❌ Ya hay una batalla activa. Usa `/reset` primero.", ephemeral=True)
+            return
+
+    @bot.tree.command(name="subirstat", description="Elige qué stat subir en tus figuras con nivel pendiente")
+    async def subir_stat_cmd(interaction: discord.Interaction):
+        db = load_db()
+        user = get_user(db, interaction.user.id)
+        if not user:
+            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+
+        # Buscar figuras con pending
+        pending_figs = [(i, fd) for i, fd in enumerate(user.get("figures", [])) if fd.get("pending_stat_up", 0) > 0]
+        if not pending_figs:
+            await interaction.response.send_message("✅ No hay figuras esperando subir stat.", ephemeral=True)
+            return
+
+        idx, fd = pending_figs[0]
+        fig = FIGURES.get(fd["key"], {})
+        fig_name = fig.get("name", fd["key"])
+        fig_emoji = fig.get("emoji", "🎭")
+        lvl = fd.get("level", 1)
+
+        embed = discord.Embed(
+            title=f"⬆️ {fig_emoji} {fig_name} — Nv.{lvl}",
+            description=f"Tienes **{fd['pending_stat_up']}** punto(s) de stat pendiente.\n¿Qué stat quieres subir **+2**?",
+            color=0xf1c40f
+        )
+        view = discord.ui.View(timeout=60)
+        stats = [("hp", "❤️ HP +2"), ("attack", "⚔️ ATK +2"), ("defense", "🛡️ DEF +2"), ("speed", "⚡ VEL +2")]
+
+        for stat_key, label in stats:
+            btn = discord.ui.Button(label=label, style=discord.ButtonStyle.primary)
+            def make_cb(sk, sl, fig_idx):
+                async def cb(inter: discord.Interaction):
+                    if inter.user.id != interaction.user.id:
+                        await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                        return
+                    db2 = load_db()
+                    u2 = get_user(db2, inter.user.id)
+                    target_fd = u2["figures"][fig_idx]
+                    if "stat_ups" not in target_fd:
+                        target_fd["stat_ups"] = {}
+                    target_fd["stat_ups"][sk] = target_fd["stat_ups"].get(sk, 0) + 2
+                    target_fd["pending_stat_up"] = max(0, target_fd.get("pending_stat_up", 0) - 1)
+                    save_db(db2)
+                    result = discord.Embed(
+                        title=f"✅ ¡{FIGURES.get(target_fd['key'],{}).get('emoji','🎭')} {FIGURES.get(target_fd['key'],{}).get('name',target_fd['key'])} mejorado!",
+                        description=f"**{sl}** permanente aplicado. (Nv.{target_fd.get('level',1)})",
+                        color=0x2ecc71
+                    )
+                    await inter.response.edit_message(embed=result, view=None)
+                    # Verificar si quedan más pending
+                    if target_fd.get("pending_stat_up", 0) > 0:
+                        await asyncio.sleep(1)
+                        await subir_stat_cmd.callback(inter)
+                return cb
+            btn.callback = make_cb(stat_key, label, idx)
+            view.add_item(btn)
+
+        await interaction.response.send_message(embed=embed, view=view)
+
+
+    @bot.tree.command(name="say", description="[GAMER] Con este comando, puedes hacer que el bot diga lo que quieras")
+    @app_commands.describe(mensaje="Lo que dirá el bot")
+    async def say(interaction: discord.Interaction, mensaje: str):
+        if interaction.user.id != GAMER_ID:
+            await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
+
+    @bot.tree.command(name="trade", description="Propone un intercambio de oro, figuras o ingredientes")
+    @app_commands.describe(usuario="Usuario con quien hacer el trade")
+    async def trade(interaction: discord.Interaction, usuario: discord.Member):
+        if usuario.id == interaction.user.id:
+            await interaction.response.send_message("❌ No puedes tradear contigo mismo.", ephemeral=True)
+            return
+        db = load_db()
+        offerer = get_user(db, interaction.user.id)
+        receiver = get_user(db, usuario.id)
+        if not offerer:
+            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+        if not receiver:
+            await interaction.response.send_message("❌ Ese usuario no está registrado.", ephemeral=True)
+            return
+        if usuario.id in pending_trades:
+            await interaction.response.send_message("❌ Ese usuario ya tiene un trade pendiente.", ephemeral=True)
+            return
+
+        # Estado del trade: lo que ofrece cada lado
+        trade_state = {
+            "offerer_id":  interaction.user.id,
+            "receiver_id": usuario.id,
+            "offer":       {"coins": 0, "figures": [], "ingredients": {}},
+            "request":     {"coins": 0, "figures": [], "ingredients": {}},
+            "confirmed":   {"offerer": False, "receiver": False},
+        }
+
+        def build_trade_embed():
+            db2 = load_db()
+            o2 = get_user(db2, interaction.user.id)
+            r2 = get_user(db2, usuario.id)
+            embed = discord.Embed(title="🔄 Propuesta de Trade", color=0x3498db)
+
+            def side_value(side):
+                lines = []
+                if trade_state[side]["coins"] > 0:
+                    lines.append(f"💰 {trade_state[side]['coins']:,}🪙")
+                for fk in trade_state[side]["figures"]:
+                    fig = FIGURES.get(fk, {})
+                    lines.append(f"🎭 {fig.get('name', fk)}")
+                for k, v in trade_state[side]["ingredients"].items():
+                    if v > 0:
+                        lines.append(f"{k} {INGREDIENTS.get(k,k)} x{v}")
+                return "\n".join(lines) if lines else "_(nada aún)_"
+
+            embed.add_field(name=f"📤 {o2['name']} ofrece", value=side_value("offer"), inline=True)
+            embed.add_field(name=f"📥 {r2['name']} ofrece", value=side_value("request"), inline=True)
+
+            confirmed_str = []
+            if trade_state["confirmed"]["offerer"]: confirmed_str.append(f"✅ {o2['name']}")
+            if trade_state["confirmed"]["receiver"]: confirmed_str.append(f"✅ {r2['name']}")
+            if confirmed_str:
+                embed.set_footer(text="Confirmado por: " + ", ".join(confirmed_str))
+            return embed
+
+        def build_trade_view():
+            view = discord.ui.View(timeout=120)
+
+            # Botón añadir a mi oferta
+            add_offer_btn = discord.ui.Button(label="📤 Añadir a mi oferta", style=discord.ButtonStyle.primary, custom_id="add_offer")
+            # Botón añadir a lo que pido
+            add_req_btn   = discord.ui.Button(label="📥 Añadir lo que pido", style=discord.ButtonStyle.secondary, custom_id="add_req")
+            # Confirmar
+            confirm_btn   = discord.ui.Button(label="✅ Confirmar", style=discord.ButtonStyle.success, custom_id="confirm_trade")
+            # Cancelar
+            cancel_btn    = discord.ui.Button(label="❌ Cancelar", style=discord.ButtonStyle.danger, custom_id="cancel_trade")
+
+            async def add_offer_cb(inter: discord.Interaction):
+                if inter.user.id not in (interaction.user.id, usuario.id):
+                    await inter.response.send_message("❌ No eres parte de este trade.", ephemeral=True)
+                    return
+                side = "offer" if inter.user.id == interaction.user.id else "request"
+                await show_trade_add_menu(inter, trade_state, side, interaction, usuario, build_trade_view, build_trade_embed)
+
+            async def add_req_cb(inter: discord.Interaction):
+                if inter.user.id not in (interaction.user.id, usuario.id):
+                    await inter.response.send_message("❌ No eres parte de este trade.", ephemeral=True)
+                    return
+                side = "request" if inter.user.id == interaction.user.id else "offer"
+                await show_trade_add_menu(inter, trade_state, side, interaction, usuario, build_trade_view, build_trade_embed)
+
+            async def confirm_cb(inter: discord.Interaction):
+                if inter.user.id == interaction.user.id:
+                    trade_state["confirmed"]["offerer"] = True
+                elif inter.user.id == usuario.id:
+                    trade_state["confirmed"]["receiver"] = True
+                else:
+                    await inter.response.send_message("❌ No eres parte de este trade.", ephemeral=True)
+                    return
+
+                if trade_state["confirmed"]["offerer"] and trade_state["confirmed"]["receiver"]:
+                    # Ejecutar el trade
+                    await execute_trade(inter, trade_state, interaction, usuario)
+                else:
+                    emb = build_trade_embed()
+                    await inter.response.edit_message(embed=emb, view=build_trade_view())
+
+            async def cancel_cb(inter: discord.Interaction):
+                if inter.user.id not in (interaction.user.id, usuario.id):
+                    await inter.response.send_message("❌ No eres parte de este trade.", ephemeral=True)
+                    return
+                pending_trades.pop(usuario.id, None)
+                cancel_embed = discord.Embed(title="❌ Trade cancelado.", color=0xe74c3c)
+                await inter.response.edit_message(embed=cancel_embed, view=None)
+
+            add_offer_btn.callback = add_offer_cb
+            add_req_btn.callback   = add_req_cb
+            confirm_btn.callback   = confirm_cb
+            cancel_btn.callback    = cancel_cb
+
+            view.add_item(add_offer_btn)
+            view.add_item(add_req_btn)
+            view.add_item(confirm_btn)
+            view.add_item(cancel_btn)
+            return view
+
+        pending_trades[usuario.id] = trade_state
+        emb = build_trade_embed()
+        await interaction.response.send_message(
+            content=f"{usuario.mention} — **{offerer['name']}** quiere hacer un trade contigo!",
+            embed=emb,
+            view=build_trade_view()
+        )
+
+
+
+    @bot.tree.command(name="rebirth", description="Reinicia desde el nivel 1, manteniendo tu árbol de aprendizaje")
+    async def rebirth_cmd(interaction: discord.Interaction):
+        db   = load_db()
+        user = get_user(db, interaction.user.id)
+        if not user:
+            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+
+        rb_count = user.get("rebirth_count", 0)
+        cost     = REBIRTH_BASE_COST + rb_count * REBIRTH_COST_INC
+        coins    = user.get("coins", 0)
+        lvl      = user.get("level", 1)
+
+        embed = discord.Embed(
+            title="🔄 REBIRTH",
+            description=(
+                f"¿Estás seguro de que quieres hacer **Rebirth #{rb_count + 1}**?\n\n"
+                f"**Se reiniciará:**\n"
+                f"• Nivel → 1 · XP → 0\n"
+                f"• Skill Points no gastados → 0\n\n"
+                f"**Se conservará:**\n"
+                f"• Tu árbol de aprendizaje\n"
+                f"• Figuras · Monedas · Victorias\n\n"
+                f"💰 Coste: **{cost:,}🪙** | Tienes: **{coins:,}🪙**\n"
+                f"📈 Próximo rebirth costará: **{cost + REBIRTH_COST_INC:,}🪙**"
+            ),
+            color=0xe74c3c
+        )
+
+        if coins < cost:
+            embed.set_footer(text=f"❌ No tienes suficientes monedas. Te faltan {cost - coins:,}🪙.")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        view = discord.ui.View(timeout=60)
+        uid  = interaction.user.id
+
+        confirm_btn = discord.ui.Button(label="✅ Confirmar Rebirth", style=discord.ButtonStyle.danger)
+        cancel_btn  = discord.ui.Button(label="❌ Cancelar",          style=discord.ButtonStyle.secondary)
+
+        async def confirm_cb(inter: discord.Interaction):
+            if inter.user.id != uid:
+                await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                return
+            db2  = load_db()
+            u2   = get_user(db2, inter.user.id)
+            cost2 = REBIRTH_BASE_COST + u2.get("rebirth_count", 0) * REBIRTH_COST_INC
+            if u2.get("coins", 0) < cost2:
+                await inter.response.edit_message(content="❌ Ya no tienes suficiente oro.", embed=None, view=None)
+                return
+            # Preservar
+            tree      = u2.get("learn_tree", {})
+            figures   = u2.get("figures", [])
+            team      = u2.get("team", [None, None, None])
+            wins      = u2.get("wins", 0)
+            losses    = u2.get("losses", 0)
+            rc        = u2.get("recipe_count", 0)
+            name      = u2.get("name", "")
+            active    = u2.get("active_figure")
+            rb_new    = u2.get("rebirth_count", 0) + 1
+            # Resetear
+            u2["level"]         = 1
+            u2["xp"]            = 0
+            u2["skill_points"]  = 0
+            u2["learn_tree"]    = tree       # árbol preservado
+            u2["figures"]       = figures
+            u2["team"]          = team
+            u2["wins"]          = wins
+            u2["losses"]        = losses
+            u2["recipe_count"]  = rc
+            u2["name"]          = name
+            u2["active_figure"] = active
+            u2["coins"]         = u2.get("coins", 0) - cost2
+            u2["rebirth_count"] = rb_new
+            save_db(db2)
+            ok_embed = discord.Embed(
+                title=f"🔄 ¡Rebirth #{rb_new} completado!",
+                description=(
+                    f"Has reiniciado al nivel 1.\n"
+                    f"Tu árbol de aprendizaje sigue intacto — ¡sigue creciendo!\n"
+                    f"💰 Saldo restante: **{u2['coins']:,}🪙**"
+                ),
+                color=0xe74c3c
+            )
+            await inter.response.edit_message(embed=ok_embed, view=None)
+
+        async def cancel_cb(inter: discord.Interaction):
+            if inter.user.id != uid:
+                await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                return
+            await inter.response.edit_message(content="❌ Rebirth cancelado.", embed=None, view=None)
+
+        confirm_btn.callback = confirm_cb
+        cancel_btn.callback  = cancel_cb
+        view.add_item(confirm_btn)
+        view.add_item(cancel_btn)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
+    @bot.tree.command(name="combine", description="Fusiona 10 copias de una figura para mejorar sus habilidades")
+    async def combine_cmd(interaction: discord.Interaction):
+        db   = load_db()
+        user = get_user(db, interaction.user.id)
+        if not user:
+            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+
+        # Contar copias por tipo de figura
+        fig_counts: dict[str, int] = {}
+        for fd in user.get("figures", []):
+            k = fd.get("key")
+            if k:
+                fig_counts[k] = fig_counts.get(k, 0) + 1
+
+        # Sólo figuras con al menos 10 copias y que aún puedan mejorar
+        combine_upgrades = user.setdefault("combine_upgrades", {})
+        eligible = {
+            k: cnt for k, cnt in fig_counts.items()
+            if cnt >= COMBINE_BATCH and combine_upgrades.get(k, 0) < COMBINE_MAX_TIERS
+        }
+
+        if not eligible:
+            await interaction.response.send_message(
+                "❌ Necesitas al menos **10 copias** de una figura que aún pueda mejorar (máx 3 mejoras por figura).",
+                ephemeral=True
+            )
+            return
+
+        # Mostrar opciones
+        embed = discord.Embed(
+            title="🔀 Combinar Figuras",
+            description=(
+                f"Fusionar **10 copias** de una figura mejora su siguiente habilidad.\n"
+                f"Coste: **{COMBINE_COST}🪙** · Máximo **{COMBINE_MAX_TIERS}** mejoras por figura.\n"
+            ),
             color=0x9b59b6
         )
-        ramas = {}
-        for nid, node in LEARN_TREE.items():
-            ramas.setdefault(node["rama"], []).append((nid, node))
-        for rama, nodes in ramas.items():
-            lines = []
-            for nid, node in nodes:
-                cur = tree.get(nid, 0)
-                maxl = node["max_level"]
-                req  = node.get("requires")
-                req_met = (req is None) or (tree.get(req, 0) >= LEARN_TREE[req]["max_level"])
-                bars = "█" * cur + "░" * (maxl - cur)
-                lock = "🔒 " if not req_met else ("✅ " if cur >= maxl else "")
-                lines.append(f"{lock}**{node['name']}** [{bars}] {cur}/{maxl}\n_{node['desc']}_  *({node['cost']} SP/nv)*")
-            embed.add_field(name=rama, value="\n\n".join(lines), inline=False)
-        return embed
 
-    def build_learn_view(user_data):
-        sp   = user_data.get("skill_points", 0)
-        tree = user_data.get("learn_tree", {})
-        view = discord.ui.View(timeout=120)
-        for nid, node in LEARN_TREE.items():
-            cur  = tree.get(nid, 0)
-            req  = node.get("requires")
-            req_met = (req is None) or (tree.get(req, 0) >= LEARN_TREE[req]["max_level"])
-            maxed   = cur >= node["max_level"]
-            can_buy = req_met and not maxed and sp >= node["cost"]
-            btn = discord.ui.Button(
-                label=f"{node['name'].split(' ')[0]} Nv{cur+1}" if not maxed else f"✅ {node['name'].split(' ')[0]}",
-                style=discord.ButtonStyle.success if can_buy else discord.ButtonStyle.secondary,
-                disabled=not can_buy,
-                custom_id=f"learn_{nid}",
-                row=list(LEARN_TREE.keys()).index(nid) // 5
+        for k, cnt in list(eligible.items())[:10]:
+            fig      = FIGURES.get(k, {})
+            tier     = combine_upgrades.get(k, 0)
+            skills   = FIGURE_SKILLS.get(k, [])
+            # Para OG GAMER 64 solo contar habilidades de Fase 1
+            if k == "og_gamer64":
+                skills = [sk for sk in skills if sk.get("phase", 1) == 1]
+            next_skill = skills[tier]["name"] if tier < len(skills) else "—"
+            embed.add_field(
+                name=f"{fig.get('emoji','')} {fig.get('name', k)} ×{cnt}",
+                value=f"Mejora {tier+1}/3 → **{next_skill}** (+{SKILL_UPGRADE_BONUS} poder)\nNecesitas: 10 copias · Tienes: {cnt}",
+                inline=False
             )
-            def make_cb(node_id=nid, node_data=node):
+
+        view = discord.ui.View(timeout=120)
+        uid  = interaction.user.id
+
+        for k in list(eligible.keys())[:5]:  # máx 5 botones
+            fig = FIGURES.get(k, {})
+
+            def make_combine_cb(fig_key=k):
                 async def cb(inter: discord.Interaction):
                     if inter.user.id != uid:
                         await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
                         return
                     db2   = load_db()
                     u2    = get_user(db2, inter.user.id)
-                    sp2   = u2.get("skill_points", 0)
-                    tree2 = u2.setdefault("learn_tree", {})
-                    cur2  = tree2.get(node_id, 0)
-                    req2  = node_data.get("requires")
-                    req_met2 = (req2 is None) or (tree2.get(req2, 0) >= LEARN_TREE[req2]["max_level"])
-                    if not req_met2:
-                        await inter.response.send_message("❌ Desbloquea el nodo anterior primero.", ephemeral=True)
+                    if not u2:
+                        await inter.response.send_message("❌ Error de perfil.", ephemeral=True)
                         return
-                    if cur2 >= node_data["max_level"]:
-                        await inter.response.send_message("❌ Este nodo ya está al máximo.", ephemeral=True)
+
+                    # Re-verificar
+                    cnt2  = sum(1 for f in u2.get("figures", []) if f.get("key") == fig_key)
+                    cu2   = u2.setdefault("combine_upgrades", {})
+                    tier2 = cu2.get(fig_key, 0)
+
+                    if cnt2 < COMBINE_BATCH:
+                        await inter.response.send_message(f"❌ Ya no tienes suficientes copias ({cnt2}/10).", ephemeral=True)
                         return
-                    if sp2 < node_data["cost"]:
-                        await inter.response.send_message(f"❌ Necesitas **{node_data['cost']} SP** y tienes **{sp2}**.", ephemeral=True)
+                    if tier2 >= COMBINE_MAX_TIERS:
+                        await inter.response.send_message("❌ Esta figura ya alcanzó el máximo de mejoras.", ephemeral=True)
                         return
-                    u2["skill_points"] = sp2 - node_data["cost"]
-                    tree2[node_id] = cur2 + 1
+                    if u2.get("coins", 0) < COMBINE_COST:
+                        await inter.response.send_message(f"❌ No tienes suficiente oro. Necesitas {COMBINE_COST}🪙.", ephemeral=True)
+                        return
+
+                    # Cobrar y eliminar 10 copias (excepto la primera del equipo)
+                    u2["coins"] -= COMBINE_COST
+                    team_indices = u2.get("team", [])
+                    team_fig_keys = [u2["figures"][i]["key"] if i is not None and i < len(u2["figures"]) else None for i in team_indices]
+                    removed = 0
+                    new_figures = []
+                    kept_one = False
+                    for fd in u2["figures"]:
+                        if fd.get("key") == fig_key and removed < COMBINE_BATCH:
+                            if not kept_one:
+                                new_figures.append(fd)
+                                kept_one = True
+                            else:
+                                removed += 1
+                        else:
+                            new_figures.append(fd)
+                    u2["figures"] = new_figures
+
+                    # Reasignar índices del equipo (pueden haber cambiado)
+                    new_team = []
+                    for ti in team_indices:
+                        if ti is None:
+                            new_team.append(None)
+                        else:
+                            # Buscar el índice nuevo de esa clave
+                            key_at = None
+                            for ni, nf in enumerate(u2["figures"]):
+                                if nf.get("key") == (u2["figures"][ti]["key"] if ti < len(u2["figures"]) else None):
+                                    key_at = ni
+                                    break
+                            new_team.append(key_at)
+                    u2["team"] = new_team
+
+                    # Aplicar mejora
+                    cu2[fig_key] = tier2 + 1
+                    new_tier = tier2 + 1
+
+                    # Guardar el bonus de la habilidad mejorada
+                    skill_upgrades = u2.setdefault("skill_upgrades", {})
+                    skill_upgrades.setdefault(fig_key, {})[tier2] = SKILL_UPGRADE_BONUS
+
                     save_db(db2)
-                    await inter.response.edit_message(embed=build_learn_embed(u2), view=build_learn_view(u2))
+
+                    fig2      = FIGURES.get(fig_key, {})
+                    skills2   = FIGURE_SKILLS.get(fig_key, [])
+                    if fig_key == "og_gamer64":
+                        skills2 = [sk for sk in skills2 if sk.get("phase", 1) == 1]
+                    up_skill  = skills2[tier2]["name"] if tier2 < len(skills2) else "???"
+
+                    ok_embed = discord.Embed(
+                        title=f"✅ ¡{fig2.get('emoji','')} {fig2.get('name', fig_key)} mejorada!",
+                        description=(
+                            f"10 copias fusionadas.\n"
+                            f"🔺 **{up_skill}** +{SKILL_UPGRADE_BONUS} de poder\n"
+                            f"Mejora **{new_tier}/{COMBINE_MAX_TIERS}** aplicada."
+                            + (f"\n⛔ Combinación bloqueada para esta figura." if new_tier >= COMBINE_MAX_TIERS else "")
+                        ),
+                        color=0x9b59b6
+                    )
+                    await inter.response.edit_message(embed=ok_embed, view=None)
                 return cb
-            btn.callback = make_cb()
+
+            btn = discord.ui.Button(
+                label=f"{fig.get('emoji','')} {fig.get('name', k)}",
+                style=discord.ButtonStyle.primary,
+                custom_id=f"combine_{k}"
+            )
+            btn.callback = make_combine_cb()
             view.add_item(btn)
-        return view
 
-    await interaction.response.send_message(
-        embed=build_learn_embed(user),
-        view=build_learn_view(user),
-        ephemeral=True
-    )
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-# ============================================================
-#  /rebirth — Reinicio con árbol preservado
-@bot.tree.command(name="logros", description="Ver tus logros conseguidos y los que faltan")
-async def logros_cmd(interaction: discord.Interaction):
-    db   = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
 
-    uid    = interaction.user.id
-    earned = set(user.get("achievements", []))
-    total  = len(ACHIEVEMENTS)
-    done   = len(earned)
 
-    # Construir lista completa: conseguidos primero, luego pendientes
-    items = []
-    for aid, ach in ACHIEVEMENTS.items():
-        if aid in earned:
-            items.append(("done", aid, ach))
-    for aid, ach in ACHIEVEMENTS.items():
-        if aid not in earned:
-            items.append(("pending", aid, ach))
+    @bot.tree.command(name="learn", description="Gasta Skill Points para mejorar tu árbol de habilidades")
+    async def learn_cmd(interaction: discord.Interaction):
+        db   = load_db()
+        user = get_user(db, interaction.user.id)
+        if not user:
+            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
 
-    PAGE_SIZE = 8  # fields por página (bien dentro del límite de 25)
-    total_pages = max(1, (len(items) + PAGE_SIZE - 1) // PAGE_SIZE)
+        uid = interaction.user.id
 
-    def build_logros_embed(page: int) -> discord.Embed:
-        embed = discord.Embed(
-            title=f"🏅 Logros — {user['name']}",
-            description=f"**{done}/{total}** conseguidos  |  Página {page+1}/{total_pages}",
-            color=0xf1c40f
-        )
-        start = page * PAGE_SIZE
-        for status, aid, ach in items[start:start + PAGE_SIZE]:
-            if status == "done":
-                embed.add_field(name=f"✅ {ach['name']}", value=ach["desc"], inline=True)
-            else:
-                if ach.get("secret"):
-                    embed.add_field(name="🔒 ???", value="*Logro secreto*", inline=True)
-                else:
-                    embed.add_field(name=f"⬜ {ach['name']}", value=ach["desc"], inline=True)
-        embed.set_footer(text="✅ Conseguido  ·  ⬜ Pendiente  ·  🔒 Secreto")
-        return embed
+        def build_learn_embed(user_data):
+            sp   = user_data.get("skill_points", 0)
+            tree = user_data.get("learn_tree", {})
+            embed = discord.Embed(
+                title="📚 Árbol de Aprendizaje",
+                description=f"✨ **{sp} Skill Points** disponibles\nElige un nodo para invertir un SP.",
+                color=0x9b59b6
+            )
+            ramas = {}
+            for nid, node in LEARN_TREE.items():
+                ramas.setdefault(node["rama"], []).append((nid, node))
+            for rama, nodes in ramas.items():
+                lines = []
+                for nid, node in nodes:
+                    cur = tree.get(nid, 0)
+                    maxl = node["max_level"]
+                    req  = node.get("requires")
+                    req_met = (req is None) or (tree.get(req, 0) >= LEARN_TREE[req]["max_level"])
+                    bars = "█" * cur + "░" * (maxl - cur)
+                    lock = "🔒 " if not req_met else ("✅ " if cur >= maxl else "")
+                    lines.append(f"{lock}**{node['name']}** [{bars}] {cur}/{maxl}\n_{node['desc']}_  *({node['cost']} SP/nv)*")
+                embed.add_field(name=rama, value="\n\n".join(lines), inline=False)
+            return embed
 
-    def build_logros_view(page: int) -> discord.ui.View:
-        view = discord.ui.View(timeout=120)
-        prev_btn = discord.ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=page == 0)
-        next_btn = discord.ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=page >= total_pages - 1)
-
-        def make_nav(new_page):
-            async def cb(inter: discord.Interaction):
-                if inter.user.id != uid:
-                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
-                    return
-                await inter.response.edit_message(
-                    embed=build_logros_embed(new_page),
-                    view=build_logros_view(new_page)
+        def build_learn_view(user_data):
+            sp   = user_data.get("skill_points", 0)
+            tree = user_data.get("learn_tree", {})
+            view = discord.ui.View(timeout=120)
+            for nid, node in LEARN_TREE.items():
+                cur  = tree.get(nid, 0)
+                req  = node.get("requires")
+                req_met = (req is None) or (tree.get(req, 0) >= LEARN_TREE[req]["max_level"])
+                maxed   = cur >= node["max_level"]
+                can_buy = req_met and not maxed and sp >= node["cost"]
+                btn = discord.ui.Button(
+                    label=f"{node['name'].split(' ')[0]} Nv{cur+1}" if not maxed else f"✅ {node['name'].split(' ')[0]}",
+                    style=discord.ButtonStyle.success if can_buy else discord.ButtonStyle.secondary,
+                    disabled=not can_buy,
+                    custom_id=f"learn_{nid}",
+                    row=list(LEARN_TREE.keys()).index(nid) // 5
                 )
-            return cb
+                def make_cb(node_id=nid, node_data=node):
+                    async def cb(inter: discord.Interaction):
+                        if inter.user.id != uid:
+                            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                            return
+                        db2   = load_db()
+                        u2    = get_user(db2, inter.user.id)
+                        sp2   = u2.get("skill_points", 0)
+                        tree2 = u2.setdefault("learn_tree", {})
+                        cur2  = tree2.get(node_id, 0)
+                        req2  = node_data.get("requires")
+                        req_met2 = (req2 is None) or (tree2.get(req2, 0) >= LEARN_TREE[req2]["max_level"])
+                        if not req_met2:
+                            await inter.response.send_message("❌ Desbloquea el nodo anterior primero.", ephemeral=True)
+                            return
+                        if cur2 >= node_data["max_level"]:
+                            await inter.response.send_message("❌ Este nodo ya está al máximo.", ephemeral=True)
+                            return
+                        if sp2 < node_data["cost"]:
+                            await inter.response.send_message(f"❌ Necesitas **{node_data['cost']} SP** y tienes **{sp2}**.", ephemeral=True)
+                            return
+                        u2["skill_points"] = sp2 - node_data["cost"]
+                        tree2[node_id] = cur2 + 1
+                        save_db(db2)
+                        await inter.response.edit_message(embed=build_learn_embed(u2), view=build_learn_view(u2))
+                    return cb
+                btn.callback = make_cb()
+                view.add_item(btn)
+            return view
 
-        prev_btn.callback = make_nav(page - 1)
-        next_btn.callback = make_nav(page + 1)
-        view.add_item(prev_btn)
-        view.add_item(next_btn)
-        return view
+        await interaction.response.send_message(
+            embed=build_learn_embed(user),
+            view=build_learn_view(user),
+            ephemeral=True
+        )
 
-    await interaction.response.send_message(
-        embed=build_logros_embed(0),
-        view=build_logros_view(0),
-        ephemeral=True
-    )
+
+    @bot.tree.command(name="logros", description="Ver tus logros conseguidos y los que faltan")
+    async def logros_cmd(interaction: discord.Interaction):
+        db   = load_db()
+        user = get_user(db, interaction.user.id)
+        if not user:
+            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+
+        uid    = interaction.user.id
+        earned = set(user.get("achievements", []))
+        total  = len(ACHIEVEMENTS)
+        done   = len(earned)
+
+        # Construir lista completa: conseguidos primero, luego pendientes
+        items = []
+        for aid, ach in ACHIEVEMENTS.items():
+            if aid in earned:
+                items.append(("done", aid, ach))
+        for aid, ach in ACHIEVEMENTS.items():
+            if aid not in earned:
+                items.append(("pending", aid, ach))
+
+        PAGE_SIZE = 8  # fields por página (bien dentro del límite de 25)
+        total_pages = max(1, (len(items) + PAGE_SIZE - 1) // PAGE_SIZE)
+
+        def build_logros_embed(page: int) -> discord.Embed:
+            embed = discord.Embed(
+                title=f"🏅 Logros — {user['name']}",
+                description=f"**{done}/{total}** conseguidos  |  Página {page+1}/{total_pages}",
+                color=0xf1c40f
+            )
+            start = page * PAGE_SIZE
+            for status, aid, ach in items[start:start + PAGE_SIZE]:
+                if status == "done":
+                    embed.add_field(name=f"✅ {ach['name']}", value=ach["desc"], inline=True)
+                else:
+                    if ach.get("secret"):
+                        embed.add_field(name="🔒 ???", value="*Logro secreto*", inline=True)
+                    else:
+                        embed.add_field(name=f"⬜ {ach['name']}", value=ach["desc"], inline=True)
+            embed.set_footer(text="✅ Conseguido  ·  ⬜ Pendiente  ·  🔒 Secreto")
+            return embed
+
+        def build_logros_view(page: int) -> discord.ui.View:
+            view = discord.ui.View(timeout=120)
+            prev_btn = discord.ui.Button(label="◀", style=discord.ButtonStyle.secondary, disabled=page == 0)
+            next_btn = discord.ui.Button(label="▶", style=discord.ButtonStyle.secondary, disabled=page >= total_pages - 1)
+
+            def make_nav(new_page):
+                async def cb(inter: discord.Interaction):
+                    if inter.user.id != uid:
+                        await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                        return
+                    await inter.response.edit_message(
+                        embed=build_logros_embed(new_page),
+                        view=build_logros_view(new_page)
+                    )
+                return cb
+
+            prev_btn.callback = make_nav(page - 1)
+            next_btn.callback = make_nav(page + 1)
+            view.add_item(prev_btn)
+            view.add_item(next_btn)
+            return view
+
+        await interaction.response.send_message(
+            embed=build_logros_embed(0),
+            view=build_logros_view(0),
+            ephemeral=True
+        )
+
 
