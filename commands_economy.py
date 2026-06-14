@@ -53,9 +53,6 @@ async def lobster_cmd(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 # --- ORO (solo admins) ---
-@bot.tree.command(name="oro", description="[ADMIN] Regala monedas a un usuario")
-@app_commands.describe(usuario="Usuario al que regalar monedas", cantidad="Cantidad de monedas a regalar")
-async def oro(interaction: discord.Interaction, usuario: discord.Member, cantidad: int):
 @bot.tree.command(name="rob", description="Intenta robarle monedas a otro usuario")
 @app_commands.describe(usuario="Usuario al que intentar robar")
 async def rob(interaction: discord.Interaction, usuario: discord.Member):
@@ -132,8 +129,6 @@ async def rob(interaction: discord.Interaction, usuario: discord.Member):
 WORK_COOLDOWN = {}  # {user_id: timestamp}
 WORK_COOLDOWN_SECS = 3600  # 1 hora entre trabajos
 
-@bot.tree.command(name="work", description="Trabaja para ganar monedas con un minijuego")
-async def work(interaction: discord.Interaction):
 @bot.tree.command(name="work", description="Trabaja para ganar monedas con un minijuego")
 async def work(interaction: discord.Interaction):
     db = load_db()
@@ -528,9 +523,6 @@ def give_battle_ingredient(user):
     user["ingredients"][ingredient] = user["ingredients"].get(ingredient, 0) + 1
     return ingredient
 
-@bot.tree.command(name="ingredientes", description="Ve tus ingredientes de cocina actuales")
-async def ingredientes_cmd(interaction: discord.Interaction):
-    db = load_db()
 @bot.tree.command(name="ingredientes", description="Ve tus ingredientes de cocina actuales")
 async def ingredientes_cmd(interaction: discord.Interaction):
     db = load_db()
@@ -1756,13 +1748,6 @@ async def execute_trade(inter: discord.Interaction, trade_state, orig_inter, tar
 # ============================================================
 PLAYER_LEVEL_MAX = 100
 
-def _register_kill_for_love(owner_id, battle=None):
-    """Registra un kill en la DB del jugador para el LOVE Check de Sans (permanente)."""
-    if not owner_id:
-        return
-    try:
-        db = load_db()
-        user = get_user(db, owner_id)
 @bot.tree.command(name="rebirth", description="Reinicia desde el nivel 1, manteniendo tu árbol de aprendizaje")
 async def rebirth_cmd(interaction: discord.Interaction):
     db   = load_db()
@@ -1872,12 +1857,6 @@ COMBINE_MAX_TIERS = 3     # máximo de mejoras (3 habilidades)
 # Cuánto sube cada stat de cada habilidad mejorada (daño/curación/etc)
 SKILL_UPGRADE_BONUS = 15  # +15 de poder por tier
 
-@bot.tree.command(name="combine", description="Fusiona 10 copias de una figura para mejorar sus habilidades")
-async def combine_cmd(interaction: discord.Interaction):
-    db   = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
 @bot.tree.command(name="combine", description="Fusiona 10 copias de una figura para mejorar sus habilidades")
 async def combine_cmd(interaction: discord.Interaction):
     db   = load_db()
@@ -2048,7 +2027,6 @@ def _shop_pool(rarities: list[str]) -> list[str]:
             and k not in SECRET_FIGURES
             and k != "roblox_boss"]
 
-SHOPS = {
 @bot.tree.command(name="learn", description="Gasta Skill Points para mejorar tu árbol de habilidades")
 async def learn_cmd(interaction: discord.Interaction):
     db   = load_db()
@@ -2138,15 +2116,6 @@ async def learn_cmd(interaction: discord.Interaction):
 
 # ============================================================
 #  /rebirth — Reinicio con árbol preservado
-# ============================================================
-REBIRTH_BASE_COST = 40_000
-REBIRTH_COST_INC  = 20_000
-
-@bot.tree.command(name="rebirth", description="Reinicia desde el nivel 1, manteniendo tu árbol de aprendizaje")
-async def rebirth_cmd(interaction: discord.Interaction):
-    db   = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
 @bot.tree.command(name="logros", description="Ver tus logros conseguidos y los que faltan")
 async def logros_cmd(interaction: discord.Interaction):
     db   = load_db()
@@ -2218,7 +2187,3 @@ async def logros_cmd(interaction: discord.Interaction):
         ephemeral=True
     )
 
-# ── RECOMPENSAS VARIABLES DEL IMPOSTOR NEGRO (7v3) ──────────────────────────
-IMPOSTOR_REWARDS = {
-    3: {"coins": 4000, "recipe_sheets": 2, "auto_levels": 2,  "xp": 600,  "achievement": True},
-    4: {"coins": 2500, "recipe_sheets": 1, "auto_levels": 1,  "xp": 450,  "achievement": False},

@@ -47,37 +47,6 @@ def is_admin(interaction: discord.Interaction) -> bool:
         return interaction.user.guild_permissions.administrator
     return False
 
-# --- RESET (cualquier usuario, solo afecta su canal) ---
-@bot.tree.command(name="reset", description="Reinicia la batalla activa en este canal")
-async def reset_battle(interaction: discord.Interaction):
-    if not is_admin(interaction):
-        await interaction.response.send_message("❌ Solo los admins pueden reiniciar batallas.", ephemeral=True)
-        return
-    removed = False
-    if interaction.channel_id in active_battles:
-        del active_battles[interaction.channel_id]
-        removed = True
-    # Limpiar también peleas PvP pendientes en este canal
-    to_remove = [k for k, v in pending_pvp.items() if v.get("channel_id") == interaction.channel_id]
-    for k in to_remove:
-        del pending_pvp[k]
-        removed = True
-    if removed:
-        embed = discord.Embed(
-            title="🔄 Batalla reiniciada",
-            description="La batalla activa en este canal ha sido cancelada. ¡Podéis iniciar una nueva!",
-            color=0x3498db
-        )
-        await interaction.response.send_message(embed=embed)
-    else:
-        await interaction.response.send_message("❌ No hay ninguna batalla activa en este canal.", ephemeral=True)
-
-# --- BOMB (solo admins) ---
-@bot.tree.command(name="bomb", description="[ADMIN] Quita monedas a un usuario")
-@app_commands.describe(usuario="Usuario objetivo", cantidad="Monedas a quitar")
-async def bomb(interaction: discord.Interaction, usuario: discord.Member, cantidad: int):
-    if not is_admin(interaction):
-        await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
 @bot.tree.command(name="bomb", description="[ADMIN] Quita monedas a un usuario")
 @app_commands.describe(usuario="Usuario objetivo", cantidad="Monedas a quitar")
 async def bomb(interaction: discord.Interaction, usuario: discord.Member, cantidad: int):
@@ -134,15 +103,6 @@ async def nuke(interaction: discord.Interaction, usuario: discord.Member):
 
 # --- ROB ---
 ROB_COOLDOWN = {}  # {user_id: timestamp}
-
-@bot.tree.command(name="rob", description="Intenta robarle monedas a otro usuario")
-@app_commands.describe(usuario="Usuario al que intentar robar")
-async def rob(interaction: discord.Interaction, usuario: discord.Member):
-    if usuario.id == interaction.user.id:
-        await interaction.response.send_message("❌ No puedes robarte a ti mismo.", ephemeral=True)
-        return
-
-    now = datetime.now(timezone.utc).timestamp()
 @bot.tree.command(name="ayuda", description="Ver todos los comandos disponibles")
 async def ayuda(interaction: discord.Interaction):
     embed = discord.Embed(
@@ -198,26 +158,6 @@ async def ayuda(interaction: discord.Interaction):
     embed.set_footer(text="¡Colecciona, mejora y conquista la arena! | Androide del PvP")
     await interaction.response.send_message(embed=embed)
 
-
-# --- LOBSTER ---
-@bot.tree.command(name="lobster", description="🦞 Obtén una langosta misteriosa")
-async def lobster_cmd(interaction: discord.Interaction):
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-@bot.tree.command(name="say", description="[GAMER] Con este comando, puedes hacer que el bot diga lo que quieras")
-@app_commands.describe(mensaje="Lo que dirá el bot")
-async def say(interaction: discord.Interaction, mensaje: str):
-    if interaction.user.id != GAMER_ID:
-        await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
-        return
-    # Borrar la interacción silenciosamente y enviar el mensaje como el bot
-    await interaction.response.send_message("✅ Enviado.", ephemeral=True)
-    await interaction.channel.send(mensaje)
-
-
-# --- HOLY (solo usuario especial — NO aparece en /ayuda) ---
-HOLY_USER_ID = 1236293193893412975
-
 @bot.tree.command(name="holy", description="...")
 async def holy_cmd(interaction: discord.Interaction):
     if interaction.user.id != HOLY_USER_ID:
@@ -269,11 +209,6 @@ async def holy_cmd(interaction: discord.Interaction):
 # ============================================================
 
 # --- GIFT ---
-@bot.tree.command(name="gift", description="Regala oro, figuras o ingredientes a otro usuario")
-@app_commands.describe(usuario="Usuario al que regalar")
-async def gift(interaction: discord.Interaction, usuario: discord.Member):
-    if interaction.user.id != 1236293193893412975:
-        await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
 @bot.tree.command(name="gift", description="Regala oro, figuras o ingredientes a otro usuario")
 @app_commands.describe(usuario="Usuario al que regalar")
 async def gift(interaction: discord.Interaction, usuario: discord.Member):
@@ -485,10 +420,6 @@ async def gift(interaction: discord.Interaction, usuario: discord.Member):
 # --- TRADE ---
 pending_trades = {}  # {receiver_id: trade_data}
 
-@bot.tree.command(name="trade", description="Propone un intercambio de oro, figuras o ingredientes")
-@app_commands.describe(usuario="Usuario con quien hacer el trade")
-async def trade(interaction: discord.Interaction, usuario: discord.Member):
-    if usuario.id == interaction.user.id:
 @bot.tree.command(name="get", description="[GAMER64] El pase dorado y exclusivo...")
 async def get_cmd(interaction: discord.Interaction):
     if interaction.user.id != GET_AUTHORIZED_ID:
@@ -553,14 +484,29 @@ async def get_cmd(interaction: discord.Interaction):
         embed=build_main_embed(), view=build_main_view(), ephemeral=True
     )
 
+_RARITY_ORDER = ["común", "raro", "épico", "legendario", "mítico"]
+_RARITY_EMOJI = {"común": "⚪", "raro": "🔵", "épico": "🟣", "legendario": "🌟", "mítico": "🔱"}
+_RARITY_NORM  = {"común":"común","raro":"raro","épico":"épico","epico":"épico",
+                 "legendario":"legendario","Legendario":"legendario",
+                 "mítico":"mítico","Mítico":"mítico"}
+
+def _get_all_by_rarity() -> dict:
+    excluded = {"roblox_boss","santa_vaca","lobster","janedoe"}
+    result = {r: [] for r in _RARITY_ORDER}
+    for key, fig in FIGURES.items():
+        if key in excluded: continue
+        r = _RARITY_NORM.get(fig.get("rarity","común"), "común")
+        if r in result:
+            result[r].append((key, fig))
+    return result
+
 async def _give_figure(inter: discord.Interaction, fig_key: str, uid: int, db):
     """Entrega la figura al usuario y confirma."""
     db2 = load_db()
     u2  = get_user(db2, inter.user.id)
     u2.setdefault("figures",[]).append({"key": fig_key, "level":1, "xp":0})
     team = u2.get("team",[None,None,None])
-    while len(team) < 3:
-        team.append(None)
+    while len(team) < 3: team.append(None)
     for i in range(3):
         if team[i] is None:
             team[i] = len(u2["figures"]) - 1
@@ -573,3 +519,113 @@ async def _give_figure(inter: discord.Interaction, fig_key: str, uid: int, db):
         title=f"✅ ¡{fig.get('name', fig_key)} obtenida!",
         description=(
             f"{fig.get('emoji','')} **{fig.get('name', fig_key)}** añadida a tu colección.\n"
+            f"{_RARITY_EMOJI.get(norm,'⚪')} {norm.capitalize()} · "
+            f"❤️{fig.get('hp','?')} ⚔️{fig.get('attack','?')} "
+            f"🛡️{fig.get('defense','?')} ⚡{fig.get('speed','?')}"
+        ),
+        color=0xffd700
+    )
+    if fig.get("image"):
+        ok.set_thumbnail(url=fig["image"])
+    await inter.response.edit_message(embed=ok, view=None)
+
+async def _show_get_select(interaction, rarity: str, by_r: dict, uid: int, db, page: int = 0, user: dict = None):
+    """Muestra un Select dropdown con las figuras de la rareza elegida."""
+    import re as _re
+    if user is None:
+        db2  = load_db()
+        user = get_user(db2, uid) or {}
+    figs        = by_r.get(rarity, [])
+    PAGE_SIZE   = 25
+    total_pages = max(1, (len(figs) + PAGE_SIZE - 1) // PAGE_SIZE)
+    page        = max(0, min(page, total_pages - 1))
+    page_figs   = figs[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
+
+    embed = discord.Embed(
+        title=f"🥇 {_RARITY_EMOJI.get(rarity,'')} {rarity.capitalize()} — Selecciona una figura",
+        description=f"Página {page+1}/{total_pages}  ·  {len(figs)} figuras",
+        color=0xffd700
+    )
+    for key, fig in page_figs:
+        embed.add_field(
+            name=f"{fig['emoji']} {fig['name']}",
+            value=f"❤️{fig.get('hp','?')} ⚔️{fig.get('attack','?')} 🛡️{fig.get('defense','?')} ⚡{fig.get('speed','?')}",
+            inline=True
+        )
+
+    options = []
+    for key, fig in page_figs:
+        raw_emoji = fig.get("emoji","")
+        emoji_val = None
+        if raw_emoji and not raw_emoji.startswith("<"):
+            emoji_val = raw_emoji
+        elif raw_emoji.startswith("<"):
+            m = _re.match(r"<(a?):([^:]+):(\d+)>", raw_emoji)
+            if m:
+                emoji_val = discord.PartialEmoji(
+                    name=m.group(2), id=int(m.group(3)), animated=m.group(1)=="a")
+        owned = any(f["key"] == key for f in user.get("figures", []))
+        options.append(discord.SelectOption(
+            label=f"{'✅ ' if owned else ''}{fig['name']}"[:100],
+            value=key,
+            description=f"❤️{fig.get('hp','?')} ⚔️{fig.get('attack','?')} 🛡️{fig.get('defense','?')} ⚡{fig.get('speed','?')}",
+            emoji=emoji_val
+        ))
+
+    view   = discord.ui.View(timeout=180)
+    select = discord.ui.Select(
+        placeholder=f"🥇 Elige una figura {_RARITY_EMOJI.get(rarity,'')} {rarity.capitalize()}...",
+        options=options, custom_id="get_select", row=0
+    )
+    async def select_cb(inter: discord.Interaction):
+        if inter.user.id != uid:
+            await inter.response.send_message("❌ No es tu menú.", ephemeral=True); return
+        await _give_figure(inter, inter.data["values"][0], uid, db)
+    select.callback = select_cb
+    view.add_item(select)
+
+    if page > 0:
+        prev_btn = discord.ui.Button(label="◀ Anterior", style=discord.ButtonStyle.secondary, custom_id="get_prev", row=1)
+        def make_prev(p=page):
+            async def cb(inter):
+                if inter.user.id != uid:
+                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True); return
+                await _show_get_select(inter, rarity, by_r, uid, db, p - 1)
+            return cb
+        prev_btn.callback = make_prev(); view.add_item(prev_btn)
+    if page < total_pages - 1:
+        next_btn = discord.ui.Button(label="Siguiente ▶", style=discord.ButtonStyle.secondary, custom_id="get_next", row=1)
+        def make_next(p=page):
+            async def cb(inter):
+                if inter.user.id != uid:
+                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True); return
+                await _show_get_select(inter, rarity, by_r, uid, db, p + 1)
+            return cb
+        next_btn.callback = make_next(); view.add_item(next_btn)
+
+    back_btn = discord.ui.Button(label="◀ Rarezas", style=discord.ButtonStyle.secondary, custom_id="get_back", row=1)
+    async def back_cb(inter: discord.Interaction):
+        if inter.user.id != uid:
+            await inter.response.send_message("❌ No es tu menú.", ephemeral=True); return
+        by_r3  = _get_all_by_rarity()
+        embed3 = discord.Embed(title="🥇 PASE DORADO — /get",
+            description="Elige una rareza y luego selecciona la figura.", color=0xffd700)
+        for r in _RARITY_ORDER:
+            figs3 = by_r3[r]
+            if not figs3: continue
+            preview3 = " · ".join(f"{f['emoji']} {f['name']}" for _, f in figs3[:8])
+            if len(figs3) > 8: preview3 += f" *(+{len(figs3)-8} más)*"
+            embed3.add_field(name=f"{_RARITY_EMOJI[r]} {r.capitalize()} ({len(figs3)})", value=preview3, inline=False)
+        opts3  = [discord.SelectOption(label=f"{r.capitalize()} ({len(by_r3[r])} figuras)", value=r, emoji=_RARITY_EMOJI[r])
+                  for r in _RARITY_ORDER if by_r3[r]]
+        sel3   = discord.ui.Select(placeholder="🥇 Elige una rareza...", options=opts3, row=0)
+        async def rarity_cb3(si: discord.Interaction):
+            if si.user.id != uid:
+                await si.response.send_message("❌ No es tu menú.", ephemeral=True); return
+            await _show_get_select(si, si.data["values"][0], by_r3, uid, db, page=0)
+        sel3.callback = rarity_cb3
+        view3 = discord.ui.View(timeout=180); view3.add_item(sel3)
+        await inter.response.edit_message(embed=embed3, view=view3)
+    back_btn.callback = back_cb
+    view.add_item(back_btn)
+    await interaction.response.edit_message(embed=embed, view=view)

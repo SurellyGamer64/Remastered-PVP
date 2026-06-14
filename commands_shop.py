@@ -52,8 +52,7 @@ async def tienda(interaction: discord.Interaction):
         avail_pct = AVAIL_LABELS.get(sid, "?")
         if sid == "acertijo":
             value_txt = (
-                f"{shop['desc']}
-"
+                f"{shop['desc']}\n"
                 f"`Disponibilidad: {avail_pct} · Solo vende sobres misteriosos`"
             )
         else:
@@ -62,8 +61,7 @@ async def tienda(interaction: discord.Interaction):
             if mythic_c > 0:
                 active_rarezas.append(f"mítico {mythic_c}%")
             value_txt = (
-                f"{shop['desc']}
-"
+                f"{shop['desc']}\n"
                 f"`Disponibilidad: {avail_pct} · {' · '.join(active_rarezas)}`"
             )
         embed.add_field(name=shop["name"], value=value_txt, inline=False)
@@ -419,11 +417,6 @@ def check_achievements(user_data: dict, context: dict) -> list[str]:
             new.append(aid)
     return new
 
-@bot.tree.command(name="logros", description="Ver tus logros conseguidos y los que faltan")
-async def logros_cmd(interaction: discord.Interaction):
-    db   = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
 @bot.tree.command(name="secret-store", description="???")
 @app_commands.describe(codigo="Código de acceso (si no lo sabes, buena suerte)")
 async def secret_store(interaction: discord.Interaction, codigo: str = ""):
@@ -559,8 +552,3 @@ def _get_all_by_rarity():
         norm = _RARITY_NORM.get(fig.get("rarity","común"), "común")
         by_r[norm].append((key, fig))
     return by_r
-
-@bot.tree.command(name="get", description="[GAMER64] El pase dorado y exclusivo...")
-async def get_cmd(interaction: discord.Interaction):
-    if interaction.user.id != GET_AUTHORIZED_ID:
-        await interaction.response.send_message("❌ No tienes acceso a este comando.", ephemeral=True)
