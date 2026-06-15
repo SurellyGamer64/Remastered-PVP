@@ -280,7 +280,8 @@ def register_commands(bot):
         embed.add_field(name="🦞 Langosta",   value="`/lobster` — Obtén una langosta misteriosa", inline=False)
         # ── Batallas ───────────────────────────────────────────────
         embed.add_field(name="⚔️ Batallas",  value=(
-            "`/pvpbot` — Elige un rival bot (5 niveles + 4 jefes)\n"
+            "`/pvp-enemy` — Pelea contra rivales normales 🔵\n"
+            "`/pvp-boss` — Pelea contra jefes difíciles 🔴\n"
             "`/retar @usuario` — Reta a otro jugador 1v1\n"
             "`/multiplayer` — Batalla de 2 a 4 jugadores\n"
             "`/reset` — Cancela la batalla activa del canal"
@@ -639,4 +640,3 @@ def register_commands(bot):
         await interaction.response.send_message(
             embed=build_main_embed(), view=build_main_view(), ephemeral=True
         )
-
