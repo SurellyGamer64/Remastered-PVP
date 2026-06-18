@@ -180,6 +180,12 @@ async def _show_shop(interaction: discord.Interaction, shop_id: str, db, user, u
                     return
                 u2["coins"] -= fig_price
                 u2.setdefault("figures",[]).append({"key": fig_key, "level":1, "xp":0})
+                # Dar variante predeterminada al comprar
+                from variants import VARIANTS as _VARS
+                from commands_variants import give_variant as _gv
+                _fvars = _VARS.get(fig_key, {})
+                if _fvars:
+                    _gv(u2, fig_key, next(iter(_fvars)))
                 # Auto-equipar si hay hueco
                 team = u2.get("team",[None,None,None])
                 while len(team) < 3: team.append(None)
@@ -526,6 +532,12 @@ def register_commands(bot):
                         return
                     buyer["coins"] -= price
                     buyer.setdefault("figures", []).append({"key": fig_key, "level": 1, "xp": 0})
+                    # Dar variante predeterminada al comprar
+                    from variants import VARIANTS as _VARS
+                    from commands_variants import give_variant as _gv
+                    _fvars = _VARS.get(fig_key, {})
+                    if _fvars:
+                        _gv(buyer, fig_key, next(iter(_fvars)))
                     # Auto-equipar si hay hueco
                     team = buyer.get("team", [None, None, None])
                     while len(team) < 3:

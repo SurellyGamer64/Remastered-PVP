@@ -85,13 +85,25 @@ def _apply_recipe_buffs(user_data: dict, team: list, db) -> str | None:
     return papyrus_result
 
 
-def _build_team(figs: list, team_indices: list):
+def _build_team(figs: list, team_indices: list, user_data: dict = None):
+    """Construye equipo e inyecta variant_key desde variants_equipped del usuario."""
     keys, datas = [], []
+    equipped = (user_data or {}).get("variants_equipped", {})
     for idx in (team_indices or []):
         if idx is not None and idx < len(figs):
-            keys.append(figs[idx]["key"]); datas.append(figs[idx])
+            fd  = dict(figs[idx])  # copy to avoid mutating DB data
+            key = fd["key"]
+            if key in equipped:
+                fd["variant_key"]      = equipped[key].get("key")
+                fd["variant_seasonal"] = equipped[key].get("seasonal", False)
+            keys.append(key); datas.append(fd)
     while len(keys) < 3 and figs:
-        keys.append(figs[0]["key"]); datas.append(figs[0])
+        fd  = dict(figs[0])
+        key = fd["key"]
+        if key in equipped:
+            fd["variant_key"]      = equipped[key].get("key")
+            fd["variant_seasonal"] = equipped[key].get("seasonal", False)
+        keys.append(key); datas.append(fd)
     return keys[:3], datas[:3]
 
 
@@ -118,7 +130,7 @@ async def _launch_bot_battle(inter: discord.Interaction, bot_data: dict, user: d
         await _start_impostor_7v3(inter, bot_data, user["figures"], user, db)
         return
 
-    p1_keys, p1_figs_data = _build_team(user["figures"], user.get("team", []))
+    p1_keys, p1_figs_data = _build_team(user["figures"], user.get("team", []), user)
     if not p1_keys:
         await inter.response.send_message("❌ Tu equipo está vacío. Usa /equipar primero.", ephemeral=True)
         return
@@ -379,8 +391,8 @@ async def _retar_cmd(interaction: discord.Interaction, rival: discord.Member):
     if interaction.channel_id in active_battles:
         await interaction.response.send_message("❌ Ya hay batalla activa aquí.", ephemeral=True); return
 
-    u1_keys, _ = _build_team(user["figures"],      user.get("team", []))
-    u2_keys, _ = _build_team(rival_data["figures"], rival_data.get("team", []))
+    u1_keys, _ = _build_team(user["figures"],      user.get("team", []), user)
+    u2_keys, _ = _build_team(rival_data["figures"], rival_data.get("team", []), rival_data)
 
     embed = discord.Embed(
         title="⚔️ ¡DESAFÍO PvP!",
@@ -402,8 +414,8 @@ async def _retar_cmd(interaction: discord.Interaction, rival: discord.Member):
         db2 = load_db()
         u1  = get_user(db2, interaction.user.id)
         u2  = get_user(db2, rival.id)
-        k1, d1 = _build_team(u1["figures"], u1.get("team", []))
-        k2, d2 = _build_team(u2["figures"], u2.get("team", []))
+        k1, d1 = _build_team(u1["figures"], u1.get("team", []), u1)
+        k2, d2 = _build_team(u2["figures"], u2.get("team", []), u2)
         battle = BattleState(
             p1_id=interaction.user.id, p2_id=rival.id,
             p1_team_keys=k1, p2_team_keys=k2,

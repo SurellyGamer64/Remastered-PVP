@@ -14,6 +14,15 @@ from figures import (
     XP_PER_WIN, XP_PER_LOSS, COINS_WIN, COINS_LOSS,
     apply_level_bonus,
 )
+from variants import (
+    apply_variant, apply_variant_on_attack, apply_variant_on_defense,
+    apply_color_multiplier_to_dmg, get_active_variant,
+    SEASONAL_VARIANTS, SEASONS,
+)
+from variants import (
+    apply_variant, apply_variant_on_attack, apply_variant_on_defense,
+    apply_color_multiplier_to_dmg, get_active_variant, SEASONAL_VARIANTS,
+)
 from economy import (
     INGREDIENTS, RECIPES, ACHIEVEMENTS, FIGURE_LEVEL_MAX,
     BATTLE_INGREDIENT_DROP_CHANCE,
@@ -90,6 +99,12 @@ def make_fighter(fig_key, owner_fig_data, hp_mult=1.0, atk_mult=1.0, energy_bonu
     if fig_key == "annoying_dog":
         fighter["secret_stats"] = True
 
+    # Aplicar variante si viene en owner_fig_data
+    variant_key = owner_fig_data.get("variant_key")
+    variant_seasonal = owner_fig_data.get("variant_seasonal", False)
+    if variant_key:
+        apply_variant(fighter, variant_key, is_seasonal=variant_seasonal)
+
     return fighter
 
 class BattleState:
@@ -119,7 +134,7 @@ class BattleState:
         self.turn = 1
         self.log = []
         self.message = None
-        self.p1_name = "Jugador 1"   # se sobreescribe desde pvpbot/retar
+        self.p1_name = "Jugador 1"   # se sobreescribe desde pvp-enemy/pvp-boss/retar
         self.p2_name = "Jugador 2"
 
     def current_p1(self): return self.p1_team[self.p1_active]
@@ -174,6 +189,17 @@ class BattleState:
     def any_alive(self, team):
         """Verifica si queda alguna figura viva en el equipo."""
         return any(f["hp"] > 0 for f in team)
+
+    def _force_switch_next(self, team, current_idx):
+        """Fuerza el cambio a la siguiente figura viva (para Trick or Treat, etc.)"""
+        next_idx = self.next_alive(team, current_idx)
+        if next_idx is not None and next_idx != current_idx:
+            if team is self.p1_team:
+                self.p1_active = next_idx
+            else:
+                self.p2_active = next_idx
+            return True
+        return False
 
     def tick_locks(self):
         """Reduce el contador force_locked y absorbed_turns al inicio de cada turno."""
@@ -635,6 +661,24 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
     atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
     battle.log = []
 
+    # ── APRIL FOOLS: intercambiar stats al inicio del primer turno ───────
+    if not getattr(battle, "april_fools_swapped", False):
+        for fighter in battle.p1_team + battle.p2_team:
+            if fighter.get("april_fools_pending_swap"):
+                opp_team = battle.p2_team if fighter in battle.p1_team else battle.p1_team
+                opp = opp_team[0] if opp_team else None
+                if opp:
+                    # Intercambiar stats y habilidades
+                    for stat in ("hp", "max_hp", "atk", "defense", "speed", "skills"):
+                        fighter[stat], opp[stat] = opp[stat], fighter[stat]
+                    battle.log.append(
+                        f"   🃏 **APRIL FOOLS**: ¡Stats y habilidades de "
+                        f"**{fighter['name']}** y **{opp['name']}** fueron intercambiadas!"
+                    )
+                    fighter.pop("april_fools_pending_swap", None)
+        battle.april_fools_swapped = True
+    # ─────────────────────────────────────────────────────────────────────
+
     # Reducir contadores de bloqueo
     battle.tick_locks()
 
@@ -818,6 +862,9 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
         max_power = max((sk.get("power", 0) for sk in attacker["skills"]), default=20)
         base_dmg = max(1, round(max_power / 2))
         dmg = max(1, base_dmg + (bonus_atk // 2) + random.randint(-2, 3) - (defender["defense"] // 6))
+        # ── Variante: efectos en ataque básico ───────────────────────────
+        dmg = apply_variant_on_attack(attacker, defender, dmg, battle, battle.log)
+        dmg = apply_color_multiplier_to_dmg(dmg, attacker, defender, battle.log)
         # Apple Armor: reduce el daño recibido
         if defender.get("apple_armor_turns", 0) > 0:
             reduction = defender.get("apple_armor_reduction", 0.5)
@@ -873,6 +920,7 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             defender["atk"] = defender.get("atk", 1) + 40
             battle.log.append(f"   😤 **Sans** despertó furioso. +40 ATK permanente!")
 
+        dmg = apply_variant_on_defense(defender, attacker, dmg, battle, battle.log)
         defender["hp"] = max(0, defender["hp"] - dmg)
         # Parry check
         if defender.get("parrying"):
@@ -933,12 +981,16 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             entangle_bonus = 15 if defender.get("entangled") else 0
             effective_atk = attacker["atk"] + bonus_atk + entangle_bonus
             dmg = battle.calc_damage(effective_atk, defender["defense"], skill["power"] + su_bonus)
+            # ── Variante: efectos en ataque ──────────────────────────────
+            dmg = apply_variant_on_attack(attacker, defender, dmg, battle, battle.log)
+            dmg = apply_color_multiplier_to_dmg(dmg, attacker, defender, battle.log)
             # Apple Armor: reduce el daño recibido
             if defender.get("apple_armor_turns", 0) > 0:
                 reduction = defender.get("apple_armor_reduction", 0.5)
                 dmg = max(1, int(dmg * reduction))
                 defender["apple_armor_turns"] -= 1
                 battle.log.append(f"   🍎🛡️ **Apple Armor** absorbe el golpe! (daño reducido al {int(reduction*100)}%, quedan {defender['apple_armor_turns']} turnos)")
+            dmg = apply_variant_on_defense(defender, attacker, dmg, battle, battle.log)
             defender["hp"] = max(0, defender["hp"] - dmg)
             buff_txt = f" (⭐+{bonus_atk} ATK)" if bonus_atk else ""
             battle.log.append(f"⚔️ **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**{buff_txt} → **{dmg}** daño!")
@@ -2700,6 +2752,22 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             attacker["hp"] = 0
             battle.log.append(f"   💀 **OMEGA FLOWEY** cayó en su propia explosión...")
 
+
+    # ── Halloween candy drop al matar una figura ─────────────────────────
+    if defender["hp"] <= 0:
+        _atk_variant = attacker.get("variant_passive")
+        if _atk_variant == "halloween_stun":
+            import random as _r
+            if _r.randint(1, 100) <= 30:
+                from database import load_db as _ldb, save_db as _sdb, get_user as _gu
+                _uid = battle.p1 if battle.turn == 1 else battle.p2
+                if _uid and _uid != 0:
+                    _db = _ldb(); _u = _gu(_db, _uid)
+                    if _u:
+                        _u.setdefault("ingredients", {})["🍬"] = _u["ingredients"].get("🍬", 0) + 1
+                        _sdb(_db)
+                        battle.log.append("   🍬 **Halloween**: ¡Encontraste **Dulces** al ganar!")
+    # ─────────────────────────────────────────────────────────────────────
 
     if defender["hp"] <= 0:
         # Pasiva de Gamer64: revive una vez con 80% HP

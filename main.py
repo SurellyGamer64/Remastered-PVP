@@ -34,6 +34,7 @@ import commands_battle
 import commands_profile
 import commands_economy
 import commands_admin
+import commands_variants
 
 # ============================================================
 #  FLASK — keepalive para Render / UptimeRobot
@@ -91,6 +92,7 @@ commands_shop.register_commands(bot)
 commands_profile.register_commands(bot)
 commands_economy.register_commands(bot)
 commands_admin.register_commands(bot)
+commands_variants.register_commands(bot)
 
 # ============================================================
 #  EVENTS

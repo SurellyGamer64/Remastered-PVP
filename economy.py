@@ -16,6 +16,7 @@ INGREDIENTS = {
     "🍫": "Chocolate",
     "🐮": "Santa Vaca",
     "🍝": "Spaghetti",
+    "🍬": "Dulces de Halloween",
 }
 
 RECIPES = [
