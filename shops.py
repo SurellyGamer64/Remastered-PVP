@@ -179,11 +179,36 @@ def time_until_reset() -> str:
     return f"{s}s"
 
 
-def _pick_shop_figures(shop_id: str, count: int, FIGURES, SECRET_FIGURES) -> list:
-    """Elige `count` figuras para mostrar en una tienda según sus pesos de rareza."""
+def _pick_shop_figures(shop_id: str, count: int, FIGURES=None, SECRET_FIGURES=None) -> list:
+    """
+    Elige `count` figuras para mostrar en una tienda, respetando el STOCK ROTATIVO
+    generado por _reset_shops() cada 3 horas. Solo se eligen figuras que estén
+    dentro de _shop_state["available"][shop_id] Y que cumplan los pesos de rareza
+    de la tienda.
+
+    Si _shop_state no tiene stock todavía (primer arranque), genera uno temporal.
+    """
     shop   = SHOPS[shop_id]
     w      = shop["weights"]
     mythic_chance = SHOP_MYTHIC_CHANCE.get(shop_id, 0)
+
+    # Asegurar que existe stock rotativo. Si no, y tenemos FIGURES, generarlo.
+    available_pool = _shop_state["available"].get(shop_id)
+    if not available_pool and FIGURES is not None:
+        _reset_shops(FIGURES, SECRET_FIGURES or [])
+        available_pool = _shop_state["available"].get(shop_id)
+
+    if FIGURES is None:
+        # Fallback de emergencia: importar perezosamente para no romper si no se pasó
+        from figures import FIGURES as _F, SECRET_FIGURES as _SF
+        FIGURES = _F
+        SECRET_FIGURES = SECRET_FIGURES or _SF
+        if not available_pool:
+            _reset_shops(FIGURES, SECRET_FIGURES)
+            available_pool = _shop_state["available"].get(shop_id)
+
+    SECRET_FIGURES = SECRET_FIGURES or []
+    available_pool = available_pool or set()
 
     rarity_aliases = {
         "común":      ["común"],
@@ -202,19 +227,36 @@ def _pick_shop_figures(shop_id: str, count: int, FIGURES, SECRET_FIGURES) -> lis
                 if v.get("rarity", "").lower() in [a.lower() for a in aliases]
                 and v.get("price", 0) > 0
                 and k not in SECRET_FIGURES
-                and k != "roblox_boss"]
+                and k != "roblox_boss"
+                and k in available_pool]      # ← respeta el stock rotativo
         pool.extend(figs * weight)
+
+    # Si el stock rotativo dejó el pool vacío para esta tienda (mala suerte del rango
+    # de disponibilidad), usamos todas las figuras válidas de la tienda como fallback
+    # para que la tienda nunca se quede sin nada que vender.
+    if not pool:
+        for rarity, weight in w.items():
+            if weight <= 0:
+                continue
+            aliases = rarity_aliases.get(rarity, [rarity])
+            figs = [k for k, v in FIGURES.items()
+                    if v.get("rarity", "").lower() in [a.lower() for a in aliases]
+                    and v.get("price", 0) > 0
+                    and k not in SECRET_FIGURES
+                    and k != "roblox_boss"]
+            pool.extend(figs * weight)
 
     if not pool:
         return []
 
     chosen, seen, attempts = [], set(), 0
-    while len(chosen) < count and attempts < 200:
+    while len(chosen) < count and attempts < 300:
         attempts += 1
         if mythic_chance > 0 and random.randint(1, 100) <= mythic_chance:
             mythic_pool = [k for k, v in FIGURES.items()
                            if v.get("rarity", "").lower() == "mítico"
-                           and k not in SECRET_FIGURES and v.get("price", 0) > 0]
+                           and k not in SECRET_FIGURES and v.get("price", 0) > 0
+                           and k in available_pool]
             if mythic_pool:
                 pick = random.choice(mythic_pool)
                 if pick not in seen:
@@ -325,3 +367,154 @@ def build_acertijo_info_text() -> str:
         bonus = f" + {', '.join(extras)}" if extras else ""
         lines.append(f"**{pack['name']}** `{pack['price']:,}🪙` — {rarity_str}{bonus}")
     return "\n".join(lines)
+
+
+# ============================================================
+#  TIENDA DE VARIANTES — stock rotativo cada 3 horas
+#
+#  Las variantes disponibles en la tienda dependen de:
+#    1. La temporada activa (solo variantes desbloqueadas por temporada)
+#    2. Su "op_tier" (qué tan fuerte es) — entre más fuerte, más rara su aparición
+#
+#  op_tier va de 1 (débil) a 5 (rotísimo). La probabilidad de que aparezca
+#  en stock es inversamente proporcional a su op_tier.
+# ============================================================
+
+VARIANT_SHOP_SLOTS = 4
+
+# Tabla de "qué tan OP" es cada variante de temporada (1=débil, 5=rotísimo)
+# Las variantes normales (no-temporada) también pueden salir en la tienda,
+# usando un tier estimado según sus modificadores de stats.
+SEASONAL_VARIANT_OP_TIER = {
+    "halloween":              4,
+    "trick_or_treat":         3,
+    "christmas":               3,
+    "ice_bender":              4,
+    "fire_bender":             4,
+    "sun_god":                 5,
+    "april_fools":             2,
+    "toon":                    3,
+    "low_effort_high_stats":   5,
+}
+
+# Probabilidad base de aparición por tier (más alto = más raro)
+OP_TIER_APPEARANCE_CHANCE = {
+    1: 70,   # común, casi siempre disponible
+    2: 50,
+    3: 32,
+    4: 18,
+    5: 8,    # rotísimo, casi nunca aparece
+}
+
+# Precio sugerido por tier
+OP_TIER_PRICE = {
+    1: 800,
+    2: 1500,
+    3: 3000,
+    4: 6000,
+    5: 12000,
+}
+
+_variant_shop_state = {
+    "last_reset": 0.0,
+    "available_seasonal": [],   # claves de SEASONAL_VARIANTS en stock actual
+    "available_normal":   {},   # {fig_key: [variant_key, ...]} en stock actual
+}
+
+
+def _estimate_normal_variant_tier(vdata: dict) -> int:
+    """Estima el op_tier (1-5) de una variante normal según sus modificadores."""
+    hp  = vdata.get("hp_mod", 1.0)
+    atk = vdata.get("atk_mod", 1.0)
+    de  = vdata.get("def_mod", 1.0)
+    has_passive = bool(vdata.get("passive"))
+    total_boost = (hp - 1.0) + (atk - 1.0) + (de - 1.0)
+    tier = 1
+    if total_boost >= 0.15: tier = 2
+    if total_boost >= 0.30: tier = 3
+    if total_boost >= 0.45: tier = 4
+    if has_passive:         tier = min(5, tier + 1)
+    return max(1, min(5, tier))
+
+
+def _reset_variant_shop(current_season: str = "none"):
+    """
+    Genera un nuevo stock de variantes para la Tienda de Variantes.
+    Solo incluye variantes de temporada si la temporada está activa.
+    La probabilidad de aparición de cada variante depende de su op_tier.
+    """
+    from variants import VARIANTS, SEASONAL_VARIANTS, SEASON_VARIANT_POOL
+
+    # ── Variantes de temporada disponibles ahora ──────────────────────────
+    seasonal_pool = SEASON_VARIANT_POOL.get(current_season, [])
+    available_seasonal = []
+    for vk in seasonal_pool:
+        tier   = SEASONAL_VARIANT_OP_TIER.get(vk, 3)
+        chance = OP_TIER_APPEARANCE_CHANCE.get(tier, 30)
+        if random.randint(1, 100) <= chance:
+            available_seasonal.append(vk)
+
+    # ── Variantes normales (no-temporada) disponibles ahora ───────────────
+    available_normal = {}
+    all_normal_entries = []   # [(fig_key, variant_key, tier), ...]
+    for fig_key, fig_variants in VARIANTS.items():
+        for vk, vdata in fig_variants.items():
+            tier = _estimate_normal_variant_tier(vdata)
+            all_normal_entries.append((fig_key, vk, tier))
+
+    random.shuffle(all_normal_entries)
+    for fig_key, vk, tier in all_normal_entries:
+        if len(available_normal) >= VARIANT_SHOP_SLOTS:
+            break
+        chance = OP_TIER_APPEARANCE_CHANCE.get(tier, 30)
+        if random.randint(1, 100) <= chance:
+            available_normal.setdefault(fig_key, []).append(vk)
+
+    _variant_shop_state["available_seasonal"] = available_seasonal
+    _variant_shop_state["available_normal"]   = available_normal
+    _variant_shop_state["last_reset"]         = _time.time()
+    print(f"🎨 Tienda de Variantes reseteada — temporada: {current_season}")
+
+
+def check_variant_shop_reset(current_season: str = "none"):
+    """Resetea la tienda de variantes si pasaron 3 horas."""
+    if _time.time() - _variant_shop_state["last_reset"] >= SHOP_RESET_INTERVAL:
+        _reset_variant_shop(current_season)
+
+
+def time_until_variant_reset() -> str:
+    remaining = max(0, SHOP_RESET_INTERVAL - (_time.time() - _variant_shop_state["last_reset"]))
+    h = int(remaining // 3600)
+    m = int((remaining % 3600) // 60)
+    s = int(remaining % 60)
+    if h > 0: return f"{h}h {m}m"
+    if m > 0: return f"{m}m {s}s"
+    return f"{s}s"
+
+
+def get_variant_shop_stock(current_season: str = "none") -> dict:
+    """
+    Devuelve el stock actual de la Tienda de Variantes:
+    {
+      "seasonal": [variant_key, ...],
+      "normal":   {fig_key: [variant_key, ...]},
+    }
+    Genera stock nuevo si no existe todavía.
+    """
+    if not _variant_shop_state["available_seasonal"] and not _variant_shop_state["available_normal"]:
+        _reset_variant_shop(current_season)
+    return {
+        "seasonal": list(_variant_shop_state["available_seasonal"]),
+        "normal":   dict(_variant_shop_state["available_normal"]),
+    }
+
+
+def get_variant_price(fig_key: str, variant_key: str, is_seasonal: bool = False) -> int:
+    """Calcula el precio de una variante según su op_tier."""
+    from variants import VARIANTS, SEASONAL_VARIANTS
+    if is_seasonal:
+        tier = SEASONAL_VARIANT_OP_TIER.get(variant_key, 3)
+    else:
+        vdata = VARIANTS.get(fig_key, {}).get(variant_key, {})
+        tier  = _estimate_normal_variant_tier(vdata)
+    return OP_TIER_PRICE.get(tier, 2000)

@@ -125,7 +125,7 @@ async def _show_acertijo(interaction: discord.Interaction, user: dict, uid: int,
         if inter.user.id != uid:
             await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
             return
-        await tienda.callback(inter)
+        await _show_shop_menu(inter, uid, edit=True)
     back_btn.callback = back_cb
     view.add_item(back_btn)
 
@@ -141,7 +141,8 @@ async def _show_shop(interaction: discord.Interaction, shop_id: str, db, user, u
     learn_disc = get_learn_effect(user, "shop_discount_pct")
     total_disc = discount + learn_disc
 
-    fig_keys = _pick_shop_figures(shop_id, shop["slots"])
+    check_shop_reset(FIGURES, SECRET_FIGURES)
+    fig_keys = _pick_shop_figures(shop_id, shop["slots"], FIGURES, SECRET_FIGURES)
     figs     = [(k, FIGURES[k]) for k in fig_keys]
 
     embed = discord.Embed(
@@ -219,7 +220,7 @@ async def _show_shop(interaction: discord.Interaction, shop_id: str, db, user, u
                         await inter.response.send_message(f"❌ Necesitas **{pdata['price']:,}🪙**.", ephemeral=True)
                         return
                     u2["coins"] -= pdata["price"]
-                    result = _open_mystery_pack(pid, u2, db2)
+                    result = open_mystery_pack(pid, u2, FIGURES, SECRET_FIGURES, INGREDIENTS, RECIPES, random)
                     save_db(db2)
                     fig2 = FIGURES.get(result["fig"],{}) if result["fig"] else {}
                     ok   = discord.Embed(
@@ -248,7 +249,7 @@ async def _show_shop(interaction: discord.Interaction, shop_id: str, db, user, u
         if inter.user.id != uid:
             await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
             return
-        await tienda.callback(inter)
+        await _show_shop_menu(inter, uid, edit=True)
     back_btn.callback = back_cb
     view.add_item(back_btn)
 
@@ -397,65 +398,303 @@ def _get_all_by_rarity():
     return by_r
 
 
+# ============================================================
+#  MENÚ PRINCIPAL DE TIENDAS (función reutilizable a nivel de módulo)
+#  Se usa tanto en /tienda como en el botón "◀ Cambiar tienda".
+# ============================================================
+
+AVAIL_LABELS = {
+    "mercado":  "60–80%",
+    "gamer":    "76–90%",
+    "tails":    "75–89%",
+    "bar":      "50–80%",
+    "toad":     "40–50%",
+    "acertijo": "100%",
+}
+
+async def _show_shop_menu(interaction: discord.Interaction, uid: int, edit: bool = False):
+    """Muestra el menú con las 6 tiendas de figuras + la Tienda de Variantes."""
+    db   = load_db()
+    user = get_user(db, uid)
+    if not user:
+        msg = "❌ Usa `/registrar` primero."
+        if edit:
+            await interaction.response.edit_message(content=msg, embed=None, view=None)
+        else:
+            await interaction.response.send_message(msg, ephemeral=True)
+        return
+
+    check_shop_reset(FIGURES, SECRET_FIGURES)
+
+    embed = discord.Embed(
+        title="🏪 ¿Qué tienda quieres visitar?",
+        description=(
+            "Cada tienda tiene su propio stock y probabilidades de rareza.\n"
+            f"🔄 El stock rota cada 3 horas · Próximo reset en **{time_until_reset()}**"
+        ),
+        color=0xf39c12
+    )
+    for sid, shop in SHOPS.items():
+        w = shop["weights"]
+        avail_pct = AVAIL_LABELS.get(sid, "?")
+        if sid == "acertijo":
+            value_txt = (
+                f"{shop['desc']}\n"
+                f"`Disponibilidad: {avail_pct} · Solo vende sobres misteriosos`"
+            )
+        else:
+            active_rarezas = [f"{r} {p}%" for r, p in w.items() if p > 0]
+            mythic_c = SHOP_MYTHIC_CHANCE.get(sid, 0)
+            if mythic_c > 0:
+                active_rarezas.append(f"mítico {mythic_c}%")
+            value_txt = (
+                f"{shop['desc']}\n"
+                f"`Disponibilidad: {avail_pct} · {' · '.join(active_rarezas)}`"
+            )
+        embed.add_field(name=shop["name"], value=value_txt, inline=False)
+
+    embed.add_field(
+        name="🎨 Tienda de Variantes",
+        value=(
+            "Variantes exclusivas de temporada y variantes normales raras.\n"
+            "`Mientras más OP es una variante, más difícil que aparezca en stock.`"
+        ),
+        inline=False,
+    )
+
+    view = discord.ui.View(timeout=120)
+    for sid, shop in SHOPS.items():
+        btn = discord.ui.Button(label=shop["name"], style=discord.ButtonStyle.primary, custom_id=f"shop_{sid}")
+        def make_shop_cb(shop_id=sid):
+            async def cb(inter: discord.Interaction):
+                if inter.user.id != uid:
+                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                db2   = load_db()
+                user2 = get_user(db2, inter.user.id)
+                await _show_shop(inter, shop_id, db2, user2, uid, edit=True)
+            return cb
+        btn.callback = make_shop_cb()
+        view.add_item(btn)
+
+    var_btn = discord.ui.Button(label="🎨 Tienda de Variantes", style=discord.ButtonStyle.success, custom_id="shop_variants")
+    async def var_cb(inter: discord.Interaction):
+        if inter.user.id != uid:
+            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+            return
+        await _show_variant_shop(inter, uid, edit=True)
+    var_btn.callback = var_cb
+    view.add_item(var_btn)
+
+    if edit:
+        try:
+            await interaction.response.edit_message(embed=embed, view=view)
+        except discord.errors.InteractionResponded:
+            await interaction.edit_original_response(embed=embed, view=view)
+    else:
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
+
+# ============================================================
+#  TIENDA DE VARIANTES — UI
+# ============================================================
+
+async def _show_variant_shop(interaction: discord.Interaction, uid: int, edit: bool = False):
+    """Muestra la Tienda de Variantes con stock rotativo cada 3 horas."""
+    from shops import (
+        get_variant_shop_stock, get_variant_price, check_variant_shop_reset,
+        time_until_variant_reset, SEASONAL_VARIANT_OP_TIER, _estimate_normal_variant_tier,
+    )
+    from variants import VARIANTS, SEASONAL_VARIANTS, SEASONS
+
+    db   = load_db()
+    user = get_user(db, uid)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    current_season = db.get("season", "none")
+    check_variant_shop_reset(current_season)
+    stock = get_variant_shop_stock(current_season)
+
+    season_info = SEASONS.get(current_season, {})
+    embed = discord.Embed(
+        title="🎨 Tienda de Variantes",
+        description=(
+            f"Temporada activa: **{season_info.get('name','⚔️ Sin temporada')}**\n"
+            f"🔄 Stock rota cada 3 horas · Próximo reset en **{time_until_variant_reset()}**\n"
+            f"💰 Tu oro: **{user.get('coins',0):,}🪙**\n\n"
+            "`Mientras más OP es una variante, más rara su aparición en stock.`"
+        ),
+        color=season_info.get("color", 0x9b59b6),
+    )
+
+    tier_stars = {1: "⭐", 2: "⭐⭐", 3: "⭐⭐⭐", 4: "⭐⭐⭐⭐", 5: "⭐⭐⭐⭐⭐"}
+    view = discord.ui.View(timeout=120)
+    row  = 0
+    item_count = 0
+
+    # ── Variantes de temporada en stock ────────────────────────────────────
+    seasonal_in_stock = stock.get("seasonal", [])
+    if seasonal_in_stock:
+        lines = []
+        for vk in seasonal_in_stock:
+            vd    = SEASONAL_VARIANTS.get(vk, {})
+            tier  = SEASONAL_VARIANT_OP_TIER.get(vk, 3)
+            price = get_variant_price("", vk, is_seasonal=True)
+            lines.append(f"**{vd.get('name','?')}** {tier_stars.get(tier,'')} — {price:,}🪙\n{vd.get('desc','')[:90]}")
+        embed.add_field(name="🌟 Variantes de Temporada", value="\n\n".join(lines), inline=False)
+
+        for vk in seasonal_in_stock[:4]:
+            vd    = SEASONAL_VARIANTS.get(vk, {})
+            price = get_variant_price("", vk, is_seasonal=True)
+            already_owned = vk in user.get("seasonal_variants_owned", [])
+            btn = discord.ui.Button(
+                label=f"{'✅ ' if already_owned else ''}{vd.get('name','?')[:60]} ({price:,}🪙)",
+                style=discord.ButtonStyle.success if not already_owned else discord.ButtonStyle.secondary,
+                disabled=already_owned,
+                custom_id=f"buyvar_sea_{vk}",
+                row=row,
+            )
+            def make_sea_buy(variant_key=vk, vprice=price):
+                async def cb(inter: discord.Interaction):
+                    if inter.user.id != uid:
+                        await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                        return
+                    from commands_variants import give_seasonal_variant
+                    db2   = load_db()
+                    user2 = get_user(db2, inter.user.id)
+                    if user2.get("coins", 0) < vprice:
+                        await inter.response.send_message(
+                            f"❌ Necesitas **{vprice:,}🪙** y tienes **{user2.get('coins',0):,}🪙**.",
+                            ephemeral=True,
+                        )
+                        return
+                    user2["coins"] -= vprice
+                    is_new = give_seasonal_variant(user2, variant_key)
+                    save_db(db2)
+                    vd2 = SEASONAL_VARIANTS.get(variant_key, {})
+                    ok = discord.Embed(
+                        title="✅ ¡Variante de temporada comprada!" if is_new else "✅ Compra confirmada",
+                        description=f"**{vd2.get('name','?')}**\n{vd2.get('desc','')}\n\nÚsala con `/variante`.",
+                        color=0x2ecc71,
+                    )
+                    ok.add_field(name="💳 Saldo", value=f"**{user2['coins']:,}🪙**")
+                    await inter.response.send_message(embed=ok, ephemeral=True)
+                return cb
+            btn.callback = make_sea_buy()
+            view.add_item(btn)
+            item_count += 1
+        row += 1
+
+    # ── Variantes normales en stock ────────────────────────────────────────
+    normal_in_stock = stock.get("normal", {})
+    if normal_in_stock:
+        lines = []
+        for fig_key, var_keys in normal_in_stock.items():
+            fig = FIGURES.get(fig_key, {})
+            for vk in var_keys:
+                vd    = VARIANTS.get(fig_key, {}).get(vk, {})
+                tier  = _estimate_normal_variant_tier(vd)
+                price = get_variant_price(fig_key, vk, is_seasonal=False)
+                lines.append(
+                    f"**{fig.get('name','?')} [{vd.get('name_suffix','?')}]** {tier_stars.get(tier,'')} — {price:,}🪙\n"
+                    f"{vd.get('desc','')[:90]}"
+                )
+        if lines:
+            embed.add_field(name="🎭 Variantes Normales", value="\n\n".join(lines[:4]), inline=False)
+
+        btn_count = 0
+        for fig_key, var_keys in normal_in_stock.items():
+            if btn_count >= 4:
+                break
+            fig = FIGURES.get(fig_key, {})
+            for vk in var_keys:
+                if btn_count >= 4:
+                    break
+                vd      = VARIANTS.get(fig_key, {}).get(vk, {})
+                price   = get_variant_price(fig_key, vk, is_seasonal=False)
+                owned_l = user.get("variants_owned", {}).get(fig_key, [])
+                already_owned = vk in owned_l
+                label = f"{'✅ ' if already_owned else ''}{fig.get('name','?')[:30]} [{vd.get('name_suffix','?')[:20]}] ({price:,}🪙)"
+                btn = discord.ui.Button(
+                    label=label[:80],
+                    style=discord.ButtonStyle.primary if not already_owned else discord.ButtonStyle.secondary,
+                    disabled=already_owned,
+                    custom_id=f"buyvar_norm_{fig_key}_{vk}",
+                    row=row,
+                )
+                def make_norm_buy(fkey=fig_key, variant_key=vk, vprice=price):
+                    async def cb(inter: discord.Interaction):
+                        if inter.user.id != uid:
+                            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                            return
+                        from commands_variants import give_variant
+                        db2   = load_db()
+                        user2 = get_user(db2, inter.user.id)
+                        if user2.get("coins", 0) < vprice:
+                            await inter.response.send_message(
+                                f"❌ Necesitas **{vprice:,}🪙** y tienes **{user2.get('coins',0):,}🪙**.",
+                                ephemeral=True,
+                            )
+                            return
+                        user2["coins"] -= vprice
+                        is_new = give_variant(user2, fkey, variant_key)
+                        save_db(db2)
+                        fig2 = FIGURES.get(fkey, {})
+                        vd2  = VARIANTS.get(fkey, {}).get(variant_key, {})
+                        ok = discord.Embed(
+                            title="✅ ¡Variante comprada!" if is_new else "✅ Compra confirmada",
+                            description=(
+                                f"**{fig2.get('name','?')} [{vd2.get('name_suffix','?')}]**\n"
+                                f"{vd2.get('desc','')}\n\nÚsala con `/variante`."
+                            ),
+                            color=0x2ecc71,
+                        )
+                        ok.add_field(name="💳 Saldo", value=f"**{user2['coins']:,}🪙**")
+                        await inter.response.send_message(embed=ok, ephemeral=True)
+                    return cb
+                btn.callback = make_norm_buy()
+                view.add_item(btn)
+                btn_count += 1
+                item_count += 1
+        row += 1
+
+    if item_count == 0:
+        embed.add_field(
+            name="📭 Sin stock disponible",
+            value=(
+                "Esta rotación no trajo variantes disponibles (o no hay temporada activa).\n"
+                f"Vuelve en **{time_until_variant_reset()}** para ver el nuevo stock."
+            ),
+            inline=False,
+        )
+
+    back_btn = discord.ui.Button(label="◀ Cambiar tienda", style=discord.ButtonStyle.secondary, custom_id="back_variant_shop", row=4)
+    async def back_cb(inter: discord.Interaction):
+        if inter.user.id != uid:
+            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+            return
+        await _show_shop_menu(inter, uid, edit=True)
+    back_btn.callback = back_cb
+    view.add_item(back_btn)
+
+    if edit:
+        try:
+            await interaction.response.edit_message(embed=embed, view=view)
+        except discord.errors.InteractionResponded:
+            await interaction.edit_original_response(embed=embed, view=view)
+    else:
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
 def register_commands(bot):
     """Registra los comandos slash de este módulo. Llamar desde main.py."""
 
     @bot.tree.command(name="tienda", description="Elige entre 6 tiendas y compra figuras")
     async def tienda(interaction: discord.Interaction):
-        db   = load_db()
-        user = get_user(db, interaction.user.id)
-        if not user:
-            await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-            return
-
-        uid = interaction.user.id
-
-        # ── Menú de selección de tienda ──────────────────────────
-        embed = discord.Embed(
-            title="🏪 ¿Qué tienda quieres visitar?",
-            description="Cada tienda tiene su propio stock y probabilidades de rareza.",
-            color=0xf39c12
-        )
-        # Mostrar info de disponibilidad y probabilidades por tienda
-        AVAIL_LABELS = {
-            "mercado":  "60–80%",
-            "gamer":    "76–90%",
-            "tails":    "75–89%",
-            "bar":      "50–80%",
-            "toad":     "40–50%",
-            "acertijo": "100%",
-        }
-        for sid, shop in SHOPS.items():
-            w = shop["weights"]
-            avail_pct = AVAIL_LABELS.get(sid, "?")
-            if sid == "acertijo":
-                value_txt = (
-                    f"{shop['desc']}\n"
-                    f"`Disponibilidad: {avail_pct} · Solo vende sobres misteriosos`"
-                )
-            else:
-                active_rarezas = [f"{r} {p}%" for r, p in w.items() if p > 0]
-                mythic_c = SHOP_MYTHIC_CHANCE.get(sid, 0)
-                if mythic_c > 0:
-                    active_rarezas.append(f"mítico {mythic_c}%")
-                value_txt = (
-                    f"{shop['desc']}\n"
-                    f"`Disponibilidad: {avail_pct} · {' · '.join(active_rarezas)}`"
-                )
-            embed.add_field(name=shop["name"], value=value_txt, inline=False)
-
-        view = discord.ui.View(timeout=120)
-        for sid, shop in SHOPS.items():
-            btn = discord.ui.Button(label=shop["name"], style=discord.ButtonStyle.primary, custom_id=f"shop_{sid}")
-            def make_shop_cb(shop_id=sid):
-                async def cb(inter: discord.Interaction):
-                    if inter.user.id != uid:
-                        await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
-                        return
-                    await _show_shop(inter, shop_id, db, user, uid, edit=True)
-                return cb
-            btn.callback = make_shop_cb()
-            view.add_item(btn)
+        await _show_shop_menu(interaction, interaction.user.id, edit=False)
 
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
