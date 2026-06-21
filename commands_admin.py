@@ -274,30 +274,42 @@ def register_commands(bot):
         # ── Básicos ────────────────────────────────────────────────
         embed.add_field(name="📋 Inicio",     value="`/registrar` — Créate una cuenta y recibe 1,000 monedas", inline=False)
         embed.add_field(name="👤 Perfil",     value="`/perfil [@usuario]` — Ve tus stats o los de otro jugador", inline=False)
-        embed.add_field(name="🏪 Tienda",     value="`/tienda` — Compra nuevas figuras", inline=False)
+        embed.add_field(name="🏪 Tienda",     value="`/tienda` — Compra nuevas figuras y variantes de temporada", inline=False)
         embed.add_field(name="🎭 Figuras",    value="`/misfiguras [@usuario]` — Colección de figuras con flechas\n`/verperfil @usuario` · `/verfiguras @usuario` — Ver info de otro jugador", inline=False)
         embed.add_field(name="⚡ Equipar",    value="`/equipar` — Arma tu equipo de 3 figuras (Frontal/Centro/Trasero)", inline=False)
         embed.add_field(name="🦞 Langosta",   value="`/lobster` — Obtén una langosta misteriosa", inline=False)
+        # ── Variantes ──────────────────────────────────────────────
+        embed.add_field(name="🎨 Variantes",  value=(
+            "`/variante` — Equipa una variante a una de tus figuras\n"
+            "`/mis-variantes` — Ve todas las variantes que posees\n"
+            "`/atributos` — Rueda de atributos: qué color vence a cuál"
+        ), inline=False)
         # ── Batallas ───────────────────────────────────────────────
         embed.add_field(name="⚔️ Batallas",  value=(
             "`/pvp-enemy` — Pelea contra rivales normales 🔵\n"
             "`/pvp-boss` — Pelea contra jefes difíciles 🔴\n"
             "`/retar @usuario` — Reta a otro jugador 1v1\n"
-            "`/multiplayer` — Batalla de 2 a 4 jugadores\n"
-            "`/reset` — Cancela la batalla activa del canal"
+            "`/multiplayer` — Batalla de 2 a 4 jugadores"
         ), inline=False)
         # ── Economía ───────────────────────────────────────────────
         embed.add_field(name="💰 Economía",  value=(
             "`/diario` — Recompensa diaria + racha semanal\n"
             "`/work` — Trabaja con minijuegos para ganar monedas (cooldown 1h)\n"
             "`/rob @usuario` — Intenta robarle monedas (cooldown 2h)\n"
+            "`/subirstat` — Sube stats con tus Skill Points\n"
             "`/perfil` — Ve tus monedas y stats actuales"
+        ), inline=False)
+        # ── Progresión ─────────────────────────────────────────────
+        embed.add_field(name="📈 Progresión", value=(
+            "`/learn` — Gasta Skill Points en tu árbol de habilidades\n"
+            "`/rebirth` — Reinicia desde el nivel 1 manteniendo tu árbol\n"
+            "`/combine` — Fusiona 10 copias de una figura para mejorarla\n"
+            "`/logros` — Ve tus logros conseguidos y los que faltan"
         ), inline=False)
         # ── Cocina ─────────────────────────────────────────────────
         embed.add_field(name="🧑‍🍳 Cocina",   value=(
             "`/cook` — Cocina 🦞 Langosta + hasta 3 ingredientes para conseguir buffs\n"
-            "`/ingredientes` — Ve tu despensa de ingredientes\n"
-            "`/recetas` — Ver tus hojas de receta descubiertas"
+            "`/ingredientes` — Ve tu despensa de ingredientes"
         ), inline=False)
         # ── Intercambios ───────────────────────────────────────────
         embed.add_field(name="🔄 Intercambios", value=(
@@ -309,14 +321,7 @@ def register_commands(bot):
             "`/quest` — Activa misiones especiales (ej: desbloquear a Jane Doe)"
         ), inline=False)
         # ── Rankings ───────────────────────────────────────────────
-        embed.add_field(name="🏆 Rankings",  value="`/ranking` — 4 leaderboards: Victorias · Dinero · Figuras · Niveles", inline=False)
-        # ── Admin (solo matheogamer64) ─────────────────────────────
-        embed.add_field(name="🔒 Solo Matheo", value=(
-            "`/oro @usuario cantidad` — Regala monedas\n"
-            "`/bomb @usuario cantidad` — Quita monedas\n"
-            "`/nuke @usuario` — Resetea a un jugador\n"
-            "`/say [mensaje]` — El bot habla"
-        ), inline=False)
+        embed.add_field(name="🏆 Rankings",  value="`/ranking` — Leaderboards: Victorias · Dinero · Figuras · Niveles · Recetas · Nivel Jugador", inline=False)
         embed.set_footer(text="¡Colecciona, mejora y conquista la arena! | Androide del PvP")
         await interaction.response.send_message(embed=embed)
 
@@ -640,3 +645,4 @@ def register_commands(bot):
         await interaction.response.send_message(
             embed=build_main_embed(), view=build_main_view(), ephemeral=True
         )
+

@@ -323,7 +323,7 @@ async def _mis_variantes_cmd(interaction: discord.Interaction):
 async def _seasons_cmd(interaction: discord.Interaction):
     if interaction.user.id != ADMIN_ID:
         await interaction.response.send_message(
-            "❌ Solo el admin puede cambiar la temporada.", ephemeral=True
+            "❌ Este comando es exclusivo de GAMER64.", ephemeral=True
         )
         return
 
@@ -431,6 +431,69 @@ def give_variant(user_data: dict, fig_key: str, variant_key: str) -> bool:
 # ║  REGISTRO                                                                   ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  /atributos                                                                 ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+
+async def _atributos_cmd(interaction: discord.Interaction):
+    """
+    Muestra la rueda de atributos: qué color es débil/fuerte contra cuál.
+    Las variantes de color NO dan stats extra — solo activan este multiplicador
+    de daño según el matchup entre el atacante y el defensor.
+    """
+    embed = discord.Embed(
+        title="🎡 Rueda de Atributos",
+        description=(
+            "Cada figura tiene un **color predeterminado** según su variante. "
+            "El color no cambia stats — solo determina si haces **más** o **menos** "
+            "daño contra el color del rival.\n\n"
+            "Si ninguno de los dos colores tiene ventaja, la batalla se desarrolla normalmente "
+            "(daño x1, sin buff ni debuff)."
+        ),
+        color=0x9b59b6,
+    )
+
+    embed.add_field(
+        name="🔴🟡🔵🟣🟢 Rueda Normal",
+        value=(
+            "🔴 **Rojo** vence a 🟡 **Amarillo**\n"
+            "🟡 **Amarillo** vence a 🔵 **Azul**\n"
+            "🔵 **Azul** vence a 🟣 **Morado**\n"
+            "🟣 **Morado** vence a 🟢 **Verde**\n"
+            "🟢 **Verde** vence a 🔴 **Rojo**\n\n"
+            "› El color ganador hace **+25% de daño**.\n"
+            "› El color perdedor hace **-20% de daño**."
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="⬛⬜ Negro y Blanco",
+        value=(
+            "⬛ **Negro** y ⬜ **Blanco** no tienen ventaja ni desventaja contra "
+            "ningún otro color — sus batallas se desarrollan siempre con daño normal.\n\n"
+            "**Excepción:** si un ⬛ **Negro** se enfrenta a un ⬜ **Blanco**, "
+            "**¡ambos hacen el DOBLE de daño!** (x2)"
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="🎃☀️❄️ Rueda de Temporada",
+        value=(
+            "🎃 **Halloween** vence a ☀️ **Summer**\n"
+            "☀️ **Summer** vence a ❄️ **Winter**\n"
+            "❄️ **Winter** vence a 🎃 **Halloween**\n\n"
+            "🃏 **April Fools** no vence ni es vencido por ningún color del juego."
+        ),
+        inline=False,
+    )
+
+    embed.set_footer(text="Las variantes de color son predeterminadas por figura — no se compran ni se eligen libremente.")
+
+    await interaction.response.send_message(embed=embed)
+
+
 def register_commands(bot):
 
     @bot.tree.command(name="variante", description="Equipa una variante a una de tus figuras")
@@ -440,6 +503,10 @@ def register_commands(bot):
     @bot.tree.command(name="mis-variantes", description="Ve todas las variantes que posees")
     async def mis_variantes(interaction: discord.Interaction):
         await _mis_variantes_cmd(interaction)
+
+    @bot.tree.command(name="atributos", description="Ve la rueda de atributos: qué color vence a cuál")
+    async def atributos(interaction: discord.Interaction):
+        await _atributos_cmd(interaction)
 
     @bot.tree.command(name="seasons", description="[ADMIN] Cambia la temporada activa del servidor")
     async def seasons(interaction: discord.Interaction):

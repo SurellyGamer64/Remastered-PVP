@@ -106,294 +106,51 @@ def calc_color_multiplier(attacker_color: str, defender_color: str) -> float:
 VARIANTS = {
 
     # ── COMÚN ──────────────────────────────────────────────
-    "lobster": {
-        "rojo": {
-            "color": "rojo", "name_suffix": "Rojo",
-            "hp_mod": 1.1, "atk_mod": 1.1, "def_mod": 1.0,
-            "passive": None,
-            "desc": "Una langosta más agresiva. +10% HP y ATK.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "don_manzanas": {
-        "rojo": {
-            "color": "rojo", "name_suffix": "Rojo",
-            "hp_mod": 1.05, "atk_mod": 1.15, "def_mod": 0.95,
-            "passive": None,
-            "desc": "Más picante que de costumbre. +15% ATK, -5% DEF.",
-            "image": "", "seasonal": None,
-        },
-    },
+    "lobster":      {"rojo":      {"color": "rojo",      "name_suffix": "Rojo"}},
+    "don_manzanas": {"rojo":      {"color": "rojo",      "name_suffix": "Rojo"}},
 
     # ── RARO ───────────────────────────────────────────────
-    "gamer64": {
-        "rojo": {
-            "color": "rojo", "name_suffix": "Rojo",
-            "hp_mod": 1.1, "atk_mod": 1.2, "def_mod": 0.95,
-            "passive": None,
-            "desc": "Modo turbo activado. +20% ATK, +10% HP, -5% DEF.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "noob": {
-        "amarillo": {
-            "color": "amarillo", "name_suffix": "Amarillo",
-            "hp_mod": 1.15, "atk_mod": 0.9, "def_mod": 1.2,
-            "passive": None,
-            "desc": "Noob miedoso pero tanque. +20% DEF, +15% HP, -10% ATK.",
-            "image": "", "seasonal": None,
-        },
-    },
+    "gamer64":      {"rojo":      {"color": "rojo",      "name_suffix": "Rojo"}},
+    "noob":         {"amarillo":  {"color": "amarillo",  "name_suffix": "Amarillo"}},
 
     # ── ÉPICO ──────────────────────────────────────────────
-    "sonic": {
-        "azul": {
-            "color": "azul", "name_suffix": "Azul",
-            "hp_mod": 0.95, "atk_mod": 1.2, "def_mod": 0.9,
-            "passive": None,
-            "desc": "Máxima velocidad. +20% ATK, -5% HP y DEF.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "tails": {
-        "amarillo": {
-            "color": "amarillo", "name_suffix": "Amarillo",
-            "hp_mod": 1.1, "atk_mod": 1.1, "def_mod": 1.1,
-            "passive": None,
-            "desc": "En modo inventor. +10% a todo.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "agustoloco": {
-        "azul": {
-            "color": "azul", "name_suffix": "Azul",
-            "hp_mod": 1.0, "atk_mod": 1.25, "def_mod": 0.9,
-            "passive": None,
-            "desc": "Modo caos. +25% ATK, -10% DEF.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "007n7": {
-        "azul": {
-            "color": "azul", "name_suffix": "Azul",
-            "hp_mod": 1.0, "atk_mod": 1.15, "def_mod": 1.1,
-            "passive": None,
-            "desc": "Operativo en campo. +15% ATK, +10% DEF.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "two_time": {
-        "negro": {
-            "color": "negro", "name_suffix": "Negro",
-            "hp_mod": 1.2, "atk_mod": 1.2, "def_mod": 1.0,
-            "passive": None,
-            "desc": "Doble de todo. +20% HP y ATK.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "guest1337": {
-        "azul": {
-            "color": "azul", "name_suffix": "Azul",
-            "hp_mod": 1.05, "atk_mod": 1.2, "def_mod": 1.0,
-            "passive": None,
-            "desc": "El invitado élite. +20% ATK.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "janedoe": {
-        "morado": {
-            "color": "morado", "name_suffix": "Morado",
-            "hp_mod": 1.1, "atk_mod": 1.1, "def_mod": 1.1,
-            "passive": None,
-            "desc": "Misteriosa y equilibrada. +10% a todo.",
-            "image": "", "seasonal": None,
-        },
-    },
+    "sonic":        {"azul":      {"color": "azul",      "name_suffix": "Azul"}},
+    "tails":        {"amarillo":  {"color": "amarillo",  "name_suffix": "Amarillo"}},
+    "agustoloco":   {"azul":      {"color": "azul",      "name_suffix": "Azul"}},
+    "007n7":        {"azul":      {"color": "azul",      "name_suffix": "Azul"}},
+    "two_time":     {"negro":     {"color": "negro",     "name_suffix": "Negro"}},
+    "guest1337":    {"azul":      {"color": "azul",      "name_suffix": "Azul"}},
+    "janedoe":      {"morado":    {"color": "morado",    "name_suffix": "Morado"}},
 
     # ── LEGENDARIO ─────────────────────────────────────────
-    "alex": {
-        "amarillo": {
-            "color": "amarillo", "name_suffix": "Amarillo",
-            "hp_mod": 1.15, "atk_mod": 1.15, "def_mod": 1.0,
-            "passive": None,
-            "desc": "Modo constructora. +15% HP y ATK.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "ringmaster": {
-        "rojo": {
-            "color": "rojo", "name_suffix": "Rojo",
-            "hp_mod": 1.0, "atk_mod": 1.3, "def_mod": 0.9,
-            "passive": None,
-            "desc": "¡Función de gala! +30% ATK, -10% DEF.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "michibug": {
-        "azul": {
-            "color": "azul", "name_suffix": "Azul",
-            "hp_mod": 1.2, "atk_mod": 1.0, "def_mod": 1.2,
-            "passive": None,
-            "desc": "Protección máxima. +20% HP y DEF.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "1x1x1x1": {
-        "verde": {
-            "color": "verde", "name_suffix": "Verde",
-            "hp_mod": 1.1, "atk_mod": 1.2, "def_mod": 1.0,
-            "passive": None,
-            "desc": "Odio puro. +20% ATK, +10% HP.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "c00lkidd": {
-        "rojo": {
-            "color": "rojo", "name_suffix": "Rojo",
-            "hp_mod": 1.0, "atk_mod": 1.25, "def_mod": 0.95,
-            "passive": None,
-            "desc": "El hacker enojado. +25% ATK.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "noli": {
-        "morado": {
-            "color": "morado", "name_suffix": "Morado",
-            "hp_mod": 1.1, "atk_mod": 1.1, "def_mod": 1.1,
-            "passive": None,
-            "desc": "Modo misterioso. +10% a todo.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "chance": {
-        "negro": {
-            "color": "negro", "name_suffix": "Negro",
-            "hp_mod": 1.2, "atk_mod": 1.1, "def_mod": 1.1,
-            "passive": None,
-            "desc": "Oscuridad total. +20% HP, +10% ATK y DEF.",
-            "image": "", "seasonal": None,
-        },
-    },
+    "alex":         {"amarillo":  {"color": "amarillo",  "name_suffix": "Amarillo"}},
+    "ringmaster":   {"rojo":      {"color": "rojo",      "name_suffix": "Rojo"}},
+    "michibug":     {"azul":      {"color": "azul",      "name_suffix": "Azul"}},
+    "1x1x1x1":      {"verde":     {"color": "verde",     "name_suffix": "Verde"}},
+    "c00lkidd":     {"rojo":      {"color": "rojo",      "name_suffix": "Rojo"}},
+    "noli":         {"morado":    {"color": "morado",    "name_suffix": "Morado"}},
+    "chance":       {"negro":     {"color": "negro",     "name_suffix": "Negro"}},
     "johndoe": {
         "amarillo_negro": {
-            "color": "amarillo",   # rueda usa amarillo
+            "color": "amarillo",   # la rueda lo trata como amarillo
             "name_suffix": "Amarillo y Negro",
-            "hp_mod": 1.0, "atk_mod": 0.5, "def_mod": 1.0,
-            "passive": "john_half",   # afecta y es afectado al 50%
-            "desc": "Todo a medias. Ataca y recibe la mitad del daño/curación.",
-            "image": "", "seasonal": None,
+            "passive": "john_half",   # único caso especial: afecta y es afectado a la mitad
         },
     },
-    "kirby": {
-        "blanco": {
-            "color": "blanco", "name_suffix": "Blanco",
-            "hp_mod": 1.2, "atk_mod": 1.0, "def_mod": 1.2,
-            "passive": None,
-            "desc": "Kirby puro. +20% HP y DEF.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "papyrus": {
-        "rojo": {
-            "color": "rojo", "name_suffix": "Rojo",
-            "hp_mod": 1.1, "atk_mod": 1.2, "def_mod": 1.0,
-            "passive": None,
-            "desc": "¡NYEHEHEH! Versión más fuerte. +20% ATK, +10% HP.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "flowey": {
-        "amarillo": {
-            "color": "amarillo", "name_suffix": "Amarillo",
-            "hp_mod": 1.1, "atk_mod": 1.15, "def_mod": 1.0,
-            "passive": None,
-            "desc": "Howdy! +15% ATK, +10% HP.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "omega_flowey": {
-        "negro": {
-            "color": "negro", "name_suffix": "Negro",
-            "hp_mod": 1.15, "atk_mod": 1.25, "def_mod": 1.0,
-            "passive": None,
-            "desc": "Modo dios oscuro. +25% ATK, +15% HP.",
-            "image": "", "seasonal": None,
-        },
-    },
+    "kirby":        {"blanco":    {"color": "blanco",    "name_suffix": "Blanco"}},
+    "papyrus":      {"rojo":      {"color": "rojo",      "name_suffix": "Rojo"}},
+    "flowey":       {"amarillo":  {"color": "amarillo",  "name_suffix": "Amarillo"}},
+    "omega_flowey": {"negro":     {"color": "negro",     "name_suffix": "Negro"}},
 
     # ── MÍTICO ─────────────────────────────────────────────
-    "shedletsky": {
-        "amarillo": {
-            "color": "amarillo", "name_suffix": "Amarillo",
-            "hp_mod": 1.1, "atk_mod": 1.2, "def_mod": 1.1,
-            "passive": None,
-            "desc": "+20% ATK, +10% HP y DEF.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "impostor_negro": {
-        "negro": {
-            "color": "negro", "name_suffix": "Negro",
-            "hp_mod": 1.2, "atk_mod": 1.2, "def_mod": 1.1,
-            "passive": None,
-            "desc": "El impostor. +20% HP y ATK, +10% DEF.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "homero": {
-        "amarillo": {
-            "color": "amarillo", "name_suffix": "Amarillo",
-            "hp_mod": 1.15, "atk_mod": 1.1, "def_mod": 1.1,
-            "passive": None,
-            "desc": "D'oh! +15% HP, +10% ATK y DEF.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "jevil": {
-        "morado": {
-            "color": "morado", "name_suffix": "Morado",
-            "hp_mod": 1.1, "atk_mod": 1.2, "def_mod": 1.0,
-            "passive": None,
-            "desc": "CHAOS CHAOS! +20% ATK, +10% HP.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "annoying_dog": {
-        "blanco": {
-            "color": "blanco", "name_suffix": "Blanco",
-            "hp_mod": 1.2, "atk_mod": 1.1, "def_mod": 1.2,
-            "passive": None,
-            "desc": "El perro misterioso. +20% HP y DEF, +10% ATK.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "santa_vaca": {
-        "blanco": {
-            "color": "blanco", "name_suffix": "Blanco",
-            "hp_mod": 1.15, "atk_mod": 1.15, "def_mod": 1.15,
-            "passive": None,
-            "desc": "¡SANTA VACA! Modo sagrado. +15% a todo.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "sans": {
-        "azul": {
-            "color": "azul", "name_suffix": "Azul",
-            "hp_mod": 1.0, "atk_mod": 1.3, "def_mod": 1.0,
-            "passive": None,
-            "desc": "heh. +30% ATK.",
-            "image": "", "seasonal": None,
-        },
-    },
-    "og_gamer64": {
-        "blanco": {
-            "color": "blanco", "name_suffix": "Blanco",
-            "hp_mod": 1.2, "atk_mod": 1.2, "def_mod": 1.2,
-            "passive": None,
-            "desc": "El original. +20% a todo.",
-            "image": "", "seasonal": None,
-        },
-    },
+    "shedletsky":     {"amarillo": {"color": "amarillo", "name_suffix": "Amarillo"}},
+    "impostor_negro": {"negro":    {"color": "negro",    "name_suffix": "Negro"}},
+    "homero":         {"amarillo": {"color": "amarillo", "name_suffix": "Amarillo"}},
+    "jevil":          {"morado":   {"color": "morado",   "name_suffix": "Morado"}},
+    "annoying_dog":   {"blanco":   {"color": "blanco",   "name_suffix": "Blanco"}},
+    "santa_vaca":     {"blanco":   {"color": "blanco",   "name_suffix": "Blanco"}},
+    "sans":           {"azul":     {"color": "azul",     "name_suffix": "Azul"}},
+    "og_gamer64":     {"blanco":   {"color": "blanco",   "name_suffix": "Blanco"}},
 }
 
 

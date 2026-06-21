@@ -501,12 +501,17 @@ async def _show_shop_menu(interaction: discord.Interaction, uid: int, edit: bool
 # ============================================================
 
 async def _show_variant_shop(interaction: discord.Interaction, uid: int, edit: bool = False):
-    """Muestra la Tienda de Variantes con stock rotativo cada 3 horas."""
+    """
+    Muestra la Tienda de Variantes con stock rotativo cada 3 horas.
+    Solo vende variantes EXCLUSIVAS DE TEMPORADA — las variantes de color
+    son predeterminadas por figura y no se compran, vienen fijas al adquirir
+    la figura en cualquier otra tienda.
+    """
     from shops import (
         get_variant_shop_stock, get_variant_price, check_variant_shop_reset,
-        time_until_variant_reset, SEASONAL_VARIANT_OP_TIER, _estimate_normal_variant_tier,
+        time_until_variant_reset, SEASONAL_VARIANT_OP_TIER,
     )
-    from variants import VARIANTS, SEASONAL_VARIANTS, SEASONS
+    from variants import SEASONAL_VARIANTS, SEASONS
 
     db   = load_db()
     user = get_user(db, uid)
@@ -542,13 +547,13 @@ async def _show_variant_shop(interaction: discord.Interaction, uid: int, edit: b
         for vk in seasonal_in_stock:
             vd    = SEASONAL_VARIANTS.get(vk, {})
             tier  = SEASONAL_VARIANT_OP_TIER.get(vk, 3)
-            price = get_variant_price("", vk, is_seasonal=True)
+            price = get_variant_price(vk)
             lines.append(f"**{vd.get('name','?')}** {tier_stars.get(tier,'')} — {price:,}🪙\n{vd.get('desc','')[:90]}")
         embed.add_field(name="🌟 Variantes de Temporada", value="\n\n".join(lines), inline=False)
 
         for vk in seasonal_in_stock[:4]:
             vd    = SEASONAL_VARIANTS.get(vk, {})
-            price = get_variant_price("", vk, is_seasonal=True)
+            price = get_variant_price(vk)
             already_owned = vk in user.get("seasonal_variants_owned", [])
             btn = discord.ui.Button(
                 label=f"{'✅ ' if already_owned else ''}{vd.get('name','?')[:60]} ({price:,}🪙)",
@@ -588,78 +593,9 @@ async def _show_variant_shop(interaction: discord.Interaction, uid: int, edit: b
             item_count += 1
         row += 1
 
-    # ── Variantes normales en stock ────────────────────────────────────────
-    normal_in_stock = stock.get("normal", {})
-    if normal_in_stock:
-        lines = []
-        for fig_key, var_keys in normal_in_stock.items():
-            fig = FIGURES.get(fig_key, {})
-            for vk in var_keys:
-                vd    = VARIANTS.get(fig_key, {}).get(vk, {})
-                tier  = _estimate_normal_variant_tier(vd)
-                price = get_variant_price(fig_key, vk, is_seasonal=False)
-                lines.append(
-                    f"**{fig.get('name','?')} [{vd.get('name_suffix','?')}]** {tier_stars.get(tier,'')} — {price:,}🪙\n"
-                    f"{vd.get('desc','')[:90]}"
-                )
-        if lines:
-            embed.add_field(name="🎭 Variantes Normales", value="\n\n".join(lines[:4]), inline=False)
-
-        btn_count = 0
-        for fig_key, var_keys in normal_in_stock.items():
-            if btn_count >= 4:
-                break
-            fig = FIGURES.get(fig_key, {})
-            for vk in var_keys:
-                if btn_count >= 4:
-                    break
-                vd      = VARIANTS.get(fig_key, {}).get(vk, {})
-                price   = get_variant_price(fig_key, vk, is_seasonal=False)
-                owned_l = user.get("variants_owned", {}).get(fig_key, [])
-                already_owned = vk in owned_l
-                label = f"{'✅ ' if already_owned else ''}{fig.get('name','?')[:30]} [{vd.get('name_suffix','?')[:20]}] ({price:,}🪙)"
-                btn = discord.ui.Button(
-                    label=label[:80],
-                    style=discord.ButtonStyle.primary if not already_owned else discord.ButtonStyle.secondary,
-                    disabled=already_owned,
-                    custom_id=f"buyvar_norm_{fig_key}_{vk}",
-                    row=row,
-                )
-                def make_norm_buy(fkey=fig_key, variant_key=vk, vprice=price):
-                    async def cb(inter: discord.Interaction):
-                        if inter.user.id != uid:
-                            await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
-                            return
-                        from commands_variants import give_variant
-                        db2   = load_db()
-                        user2 = get_user(db2, inter.user.id)
-                        if user2.get("coins", 0) < vprice:
-                            await inter.response.send_message(
-                                f"❌ Necesitas **{vprice:,}🪙** y tienes **{user2.get('coins',0):,}🪙**.",
-                                ephemeral=True,
-                            )
-                            return
-                        user2["coins"] -= vprice
-                        is_new = give_variant(user2, fkey, variant_key)
-                        save_db(db2)
-                        fig2 = FIGURES.get(fkey, {})
-                        vd2  = VARIANTS.get(fkey, {}).get(variant_key, {})
-                        ok = discord.Embed(
-                            title="✅ ¡Variante comprada!" if is_new else "✅ Compra confirmada",
-                            description=(
-                                f"**{fig2.get('name','?')} [{vd2.get('name_suffix','?')}]**\n"
-                                f"{vd2.get('desc','')}\n\nÚsala con `/variante`."
-                            ),
-                            color=0x2ecc71,
-                        )
-                        ok.add_field(name="💳 Saldo", value=f"**{user2['coins']:,}🪙**")
-                        await inter.response.send_message(embed=ok, ephemeral=True)
-                    return cb
-                btn.callback = make_norm_buy()
-                view.add_item(btn)
-                btn_count += 1
-                item_count += 1
-        row += 1
+    # ── NOTA: las variantes de color son predeterminadas por figura y NO se ──
+    # venden en la tienda. Cada figura ya viene con su color fijo al comprarla.
+    # Solo las variantes de TEMPORADA (exclusivas) se compran aquí.
 
     if item_count == 0:
         embed.add_field(

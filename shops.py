@@ -380,11 +380,7 @@ def build_acertijo_info_text() -> str:
 #  en stock es inversamente proporcional a su op_tier.
 # ============================================================
 
-VARIANT_SHOP_SLOTS = 4
-
 # Tabla de "qué tan OP" es cada variante de temporada (1=débil, 5=rotísimo)
-# Las variantes normales (no-temporada) también pueden salir en la tienda,
-# usando un tier estimado según sus modificadores de stats.
 SEASONAL_VARIANT_OP_TIER = {
     "halloween":              4,
     "trick_or_treat":         3,
@@ -418,34 +414,19 @@ OP_TIER_PRICE = {
 _variant_shop_state = {
     "last_reset": 0.0,
     "available_seasonal": [],   # claves de SEASONAL_VARIANTS en stock actual
-    "available_normal":   {},   # {fig_key: [variant_key, ...]} en stock actual
 }
-
-
-def _estimate_normal_variant_tier(vdata: dict) -> int:
-    """Estima el op_tier (1-5) de una variante normal según sus modificadores."""
-    hp  = vdata.get("hp_mod", 1.0)
-    atk = vdata.get("atk_mod", 1.0)
-    de  = vdata.get("def_mod", 1.0)
-    has_passive = bool(vdata.get("passive"))
-    total_boost = (hp - 1.0) + (atk - 1.0) + (de - 1.0)
-    tier = 1
-    if total_boost >= 0.15: tier = 2
-    if total_boost >= 0.30: tier = 3
-    if total_boost >= 0.45: tier = 4
-    if has_passive:         tier = min(5, tier + 1)
-    return max(1, min(5, tier))
 
 
 def _reset_variant_shop(current_season: str = "none"):
     """
-    Genera un nuevo stock de variantes para la Tienda de Variantes.
-    Solo incluye variantes de temporada si la temporada está activa.
-    La probabilidad de aparición de cada variante depende de su op_tier.
+    Genera un nuevo stock de variantes EXCLUSIVAS DE TEMPORADA para la Tienda
+    de Variantes. Las variantes de color son predeterminadas por figura y NO
+    se venden aquí — cada figura ya viene con su color fijo al comprarla.
+    La probabilidad de aparición de cada variante depende de su op_tier
+    (más OP = más rara su aparición en stock).
     """
-    from variants import VARIANTS, SEASONAL_VARIANTS, SEASON_VARIANT_POOL
+    from variants import SEASON_VARIANT_POOL
 
-    # ── Variantes de temporada disponibles ahora ──────────────────────────
     seasonal_pool = SEASON_VARIANT_POOL.get(current_season, [])
     available_seasonal = []
     for vk in seasonal_pool:
@@ -454,24 +435,7 @@ def _reset_variant_shop(current_season: str = "none"):
         if random.randint(1, 100) <= chance:
             available_seasonal.append(vk)
 
-    # ── Variantes normales (no-temporada) disponibles ahora ───────────────
-    available_normal = {}
-    all_normal_entries = []   # [(fig_key, variant_key, tier), ...]
-    for fig_key, fig_variants in VARIANTS.items():
-        for vk, vdata in fig_variants.items():
-            tier = _estimate_normal_variant_tier(vdata)
-            all_normal_entries.append((fig_key, vk, tier))
-
-    random.shuffle(all_normal_entries)
-    for fig_key, vk, tier in all_normal_entries:
-        if len(available_normal) >= VARIANT_SHOP_SLOTS:
-            break
-        chance = OP_TIER_APPEARANCE_CHANCE.get(tier, 30)
-        if random.randint(1, 100) <= chance:
-            available_normal.setdefault(fig_key, []).append(vk)
-
     _variant_shop_state["available_seasonal"] = available_seasonal
-    _variant_shop_state["available_normal"]   = available_normal
     _variant_shop_state["last_reset"]         = _time.time()
     print(f"🎨 Tienda de Variantes reseteada — temporada: {current_season}")
 
@@ -495,26 +459,18 @@ def time_until_variant_reset() -> str:
 def get_variant_shop_stock(current_season: str = "none") -> dict:
     """
     Devuelve el stock actual de la Tienda de Variantes:
-    {
-      "seasonal": [variant_key, ...],
-      "normal":   {fig_key: [variant_key, ...]},
-    }
+    { "seasonal": [variant_key, ...] }
+    Solo variantes exclusivas de temporada — las de color no se venden.
     Genera stock nuevo si no existe todavía.
     """
-    if not _variant_shop_state["available_seasonal"] and not _variant_shop_state["available_normal"]:
+    if not _variant_shop_state["available_seasonal"]:
         _reset_variant_shop(current_season)
     return {
         "seasonal": list(_variant_shop_state["available_seasonal"]),
-        "normal":   dict(_variant_shop_state["available_normal"]),
     }
 
 
-def get_variant_price(fig_key: str, variant_key: str, is_seasonal: bool = False) -> int:
-    """Calcula el precio de una variante según su op_tier."""
-    from variants import VARIANTS, SEASONAL_VARIANTS
-    if is_seasonal:
-        tier = SEASONAL_VARIANT_OP_TIER.get(variant_key, 3)
-    else:
-        vdata = VARIANTS.get(fig_key, {}).get(variant_key, {})
-        tier  = _estimate_normal_variant_tier(vdata)
+def get_variant_price(variant_key: str) -> int:
+    """Calcula el precio de una variante de temporada según su op_tier."""
+    tier = SEASONAL_VARIANT_OP_TIER.get(variant_key, 3)
     return OP_TIER_PRICE.get(tier, 2000)
