@@ -358,28 +358,6 @@ FIGURES = {
         "image": "https://i.postimg.cc/y8zY3Hyg/Normal.png",
         "passive": "og_gamer_phases",
     },
-    "holy_cow": {
-        "name": "Holy Cow",
-        "emoji": "🐄",
-        "rarity": "Mítico",
-        "price": 88888,
-        "hp": 500,
-        "attack": 50,
-        "defense": 50,
-        "speed": 50,
-        "image": "https://emblibrary.com/cdn/shop/files/M33422.jpg?v=1750188343&width=1214",
-    },
-    "ryu": {
-        "name":    "Ryu",
-        "emoji":   "<:Ryu:1518604002206416947>",
-        "rarity":  "mítico",
-        "price":   1987,
-        "hp":      255,
-        "attack":  50,
-        "defense": 30,
-        "speed":   32,
-        "image":   "https://i.redd.it/bb2ik9eddzrc1.jpeg",
-    },
 }
 
 # Figuras exclusivas de la tienda secreta
@@ -1125,7 +1103,8 @@ FIGURE_SKILLS = {
             "atk_buff": 14,            # +14 ATK al próximo golpe (acumulable, hasta max 33 de ATK total)
             "desc": "Don Manzanas saca una Manzana Dorada. ¡Su próximo ataque será mucho más potente! (Acumulable)",
         },
-    ],
+
+
 }
 
 
@@ -1423,57 +1402,6 @@ FIGURE_SKILLS["og_gamer64"] = [
         "self_destruct": True,
         "phase": 4,
         "desc": "Gamer explota acabando con todo. Mata a todas las figuras del oponente y a sí mismo. 20 de daño a las figuras aliadas por la explosión.",
-    },
-]
-
-# ── RYU ─────────────────────────────────────────────────────────────────────
-FIGURE_SKILLS["ryu"] = [
-    {
-        "name":  "Hadouken",
-        "cost":  30,
-        "type":  "hadouken",        # special: activates timing minigame
-        "power": 30,
-        "fire_power": 40,           # power if timing hits (Fire Hadouken)
-        "desc":  (
-            "Ryu lanza una bola de energía! "
-            "Si atinas el timing → Fire Hadouken: 40 daño + burning 2T. "
-            "Sin timing → Hadouken normal: 30 daño."
-        ),
-    },
-    {
-        "name":       "Shoryuken",
-        "cost":       40,
-        "type":       "damage",
-        "power":      20,
-        "stun":       True,
-        "stun_turns": 2,
-        "desc":       "Ryu hace un gancho. 20 daño y stun 2 turnos al oponente.",
-    },
-    {
-        "name":     "Tatsumaki Senpuu Kyaku",
-        "cost":     50,
-        "type":     "tatsumaki",    # special: activates opponent memory minigame
-        "power":    30,
-        "dot_turns": 3,
-        "desc":     (
-            "Ryu hace una patada voladora. DOT 30/turno × 3T. "
-            "Pero el oponente tiene un minijuego de memoria: si lo completa, "
-            "cancela el ataque y Ryu recibe stun 3T."
-        ),
-    },
-    {
-        "name":     "Shin-Hadoken",
-        "cost":     100,            # costs all SUPER bar (treated as energy gate)
-        "type":     "shin_hadoken",
-        "power":    150,
-        "aoe_secondary_power": 40,
-        "stun":     True,
-        "stun_turns": 2,
-        "super_move": True,         # only available when super_bar >= 100
-        "desc":     (
-            "ESTO SE ACABA AHORA! — 150 daño a la figura activa, "
-            "40 daño a las demás figuras del oponente. Ryu queda stunned 2T."
-        ),
     },
 ]
 
