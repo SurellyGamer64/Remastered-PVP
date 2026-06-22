@@ -391,6 +391,9 @@ SEASONAL_VARIANT_OP_TIER = {
     "april_fools":             2,
     "toon":                    3,
     "low_effort_high_stats":   5,
+    # [SEASON NOT FOUND]
+    "corrupted":               4,
+    "glitched":                5,
 }
 
 # Probabilidad base de aparición por tier (más alto = más raro)

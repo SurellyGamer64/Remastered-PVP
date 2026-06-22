@@ -99,6 +99,10 @@ def make_fighter(fig_key, owner_fig_data, hp_mult=1.0, atk_mult=1.0, energy_bonu
     if fig_key == "annoying_dog":
         fighter["secret_stats"] = True
 
+    # Ryu: inicializar barra SUPER
+    if fig_key == "ryu":
+        fighter["super_bar"] = 0
+
     # Aplicar variante si viene en owner_fig_data
     variant_key = owner_fig_data.get("variant_key")
     variant_seasonal = owner_fig_data.get("variant_seasonal", False)
@@ -820,6 +824,20 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             attacker["stun_turns"] = max(attacker.get("stun_turns", 0), 1)
             battle.log.append(f"💫 **{attacker['name']}** está tan mareado que pierde el turno!")
 
+    # ── MANIPULATION TICK ────────────────────────────────────────────────────
+    if attacker.get("manipulated"):
+        mt = attacker.get("manipulation_turns", 0) - 1
+        if mt <= 0:
+            attacker["manipulated"]                = False
+            attacker["manipulation_turns"]         = 0
+            attacker["manipulation_energy_penalty"] = False
+            attacker["manipulation_no_passive"]     = False
+            battle.log.append(f"   💾 **{attacker['name']}** ya no está manipulada.")
+        else:
+            attacker["manipulation_turns"] = mt
+            battle.log.append(f"   💾 **{attacker['name']}** sigue manipulada ({mt}T) — ataca a su propio equipo!")
+    # ─────────────────────────────────────────────────────────────────────────
+
     # Verificar si está aturdido (con soporte de stun_turns)
     if attacker.get("stun_turns", 0) > 0:
         attacker["stun_turns"] -= 1
@@ -847,7 +865,8 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
         return
 
     # Siempre subir energía al inicio del turno
-    attacker["energy"] = min(ENERGY_MAX, attacker["energy"] + ENERGY_PER_TURN)
+    _energy_gain = ENERGY_PER_TURN // 2 if attacker.get("manipulation_energy_penalty") else ENERGY_PER_TURN
+    attacker["energy"] = min(ENERGY_MAX, attacker["energy"] + _energy_gain)
 
     if skill_idx == -2:
         # Resetear fast_kill si usa ataque básico
@@ -855,7 +874,8 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             attacker["fast_kill_charges"] = 0
             battle.log.append(f"   ⚠️ **{attacker['name']}** interrumpió la carga de **Fast Kill**!")
         # Ataque básico — gana 20 de energía + daño = mitad del power máximo de la figura
-        attacker["energy"] = min(ENERGY_MAX, attacker["energy"] + ENERGY_PER_TURN)
+        _energy_gain2 = ENERGY_PER_TURN // 2 if attacker.get("manipulation_energy_penalty") else ENERGY_PER_TURN
+        attacker["energy"] = min(ENERGY_MAX, attacker["energy"] + _energy_gain2)
         bonus_atk = attacker.pop("atk_buff", 0)
         effective_atk = attacker["atk"] + bonus_atk
         # Daño = mitad del power de la habilidad más fuerte (skill cost 100), mínimo 1
@@ -1049,6 +1069,11 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                     defender["stunned"] = True
                     battle.log.append(f"   😵 ¡**{defender['name']}** queda aturdido 1 turno!")
 
+            # Ryu: cualquier skill normal le llena la barra SUPER
+            if attacker.get("key") == "ryu" and not skill.get("super_move"):
+                attacker["super_bar"] = min(100, attacker.get("super_bar", 0) + 25)
+                battle.log.append(f"   ⚡ SUPER de Ryu: **{attacker['super_bar']}%**")
+
             # Dot inline (Mass Infection de 1x1x1x1)
             if skill.get("dot"):
                 if "dots" not in defender: defender["dots"] = []
@@ -1155,6 +1180,88 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                     ally["atk_buff"] = ally.get("atk_buff", 0) + buff
             battle.log.append(f"⭐ **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
             battle.log.append(f"   Todo el equipo gana +{buff} ATK (acumulable, se consume al atacar)!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        # ═══════════════════════════════════════════════════════════════════
+        # RYU — Habilidades especiales
+        # ═══════════════════════════════════════════════════════════════════
+
+        elif stype == "hadouken":
+            # Timing minigame: the View adds a button that the player must press
+            # quickly. If already resolved (stored in battle.hadouken_hit), use it.
+            # If not resolved yet, default to normal Hadouken.
+            hit_timing = battle.__dict__.pop("hadouken_hit", None)
+            if hit_timing:
+                # FIRE HADOUKEN
+                dmg = battle.calc_damage(effective_atk, defender["defense"], skill["fire_power"])
+                dmg = apply_variant_on_attack(attacker, defender, dmg, battle, battle.log)
+                dmg = apply_color_multiplier_to_dmg(dmg, attacker, defender, battle.log)
+                dmg = apply_variant_on_defense(defender, attacker, dmg, battle, battle.log)
+                defender["hp"] = max(0, defender["hp"] - dmg)
+                defender["burning"]       = True
+                defender["burning_turns"] = max(defender.get("burning_turns", 0), 2)
+                battle.log.append(f"   🔥 **FIRE HADOUKEN!** {dmg} daño + burning 2T!")
+            else:
+                # Hadouken normal
+                dmg = battle.calc_damage(effective_atk, defender["defense"], skill["power"])
+                dmg = apply_variant_on_attack(attacker, defender, dmg, battle, battle.log)
+                dmg = apply_color_multiplier_to_dmg(dmg, attacker, defender, battle.log)
+                dmg = apply_variant_on_defense(defender, attacker, dmg, battle, battle.log)
+                defender["hp"] = max(0, defender["hp"] - dmg)
+                battle.log.append(f"   👊 Hadouken! {dmg} daño.")
+            # Tick SUPER bar
+            attacker["super_bar"] = min(100, attacker.get("super_bar", 0) + 25)
+            battle.log.append(f"   ⚡ SUPER: **{attacker['super_bar']}%**")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "shin_hadoken":
+            # Only usable when super_bar >= 100
+            if attacker.get("super_bar", 0) < 100:
+                # Refund energy, don't execute
+                attacker["energy"] = min(ENERGY_MAX, attacker["energy"] + skill["cost"])
+                battle.log.append(f"   ❌ Shin-Hadoken requiere la barra SUPER al 100%!")
+                await finish_turn(interaction, battle, channel_id)
+                return
+            attacker["super_bar"] = 0
+            # Main target
+            dmg = battle.calc_damage(effective_atk, defender["defense"], skill["power"])
+            dmg = apply_variant_on_attack(attacker, defender, dmg, battle, battle.log)
+            dmg = apply_color_multiplier_to_dmg(dmg, attacker, defender, battle.log)
+            dmg = apply_variant_on_defense(defender, attacker, dmg, battle, battle.log)
+            defender["hp"] = max(0, defender["hp"] - dmg)
+            battle.log.append(f"   🔱 **SHIN-HADOKEN!!** {dmg} daño a {defender['name']}!")
+            # AOE to other enemy figures
+            aoe_power = skill.get("aoe_secondary_power", 40)
+            def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+            for fig in def_team:
+                if fig is not defender and fig["hp"] > 0:
+                    sd = battle.calc_damage(effective_atk, fig["defense"], aoe_power)
+                    fig["hp"] = max(0, fig["hp"] - sd)
+                    battle.log.append(f"   💥 AOE Shin-Hadoken → {fig['name']} -{sd}HP!")
+            # Ryu stuns himself
+            attacker["stun_turns"] = skill.get("stun_turns", 2)
+            battle.log.append(f"   😵 Ryu queda stunned {attacker['stun_turns']} turnos por el esfuerzo.")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "tatsumaki":
+            # DOT skill — opponent gets a memory minigame to cancel it
+            # If battle.tatsumaki_cancelled is set, Ryu gets stunned instead
+            cancelled = battle.__dict__.pop("tatsumaki_cancelled", False)
+            if cancelled:
+                attacker["stun_turns"] = 3
+                battle.log.append(f"   ❌ El oponente completó el minijuego de memoria!")
+                battle.log.append(f"   😵 **{attacker['name']}** queda stunned 3 turnos!")
+            else:
+                if "dots" not in defender:
+                    defender["dots"] = []
+                defender["dots"].append({"dmg": skill["power"], "turns": skill.get("dot_turns", 3)})
+                battle.log.append(
+                    f"   🌀 **Tatsumaki Senpuu Kyaku!** "
+                    f"{skill['power']} daño/turno × {skill.get('dot_turns',3)}T!"
+                )
+            # Tick SUPER bar
+            attacker["super_bar"] = min(100, attacker.get("super_bar", 0) + 30)
+            battle.log.append(f"   ⚡ SUPER: **{attacker['super_bar']}%**")
             battle.log.append(f"   _{skill['desc']}_")
 
         elif stype == "dot":

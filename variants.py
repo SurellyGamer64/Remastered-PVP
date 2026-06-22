@@ -23,6 +23,7 @@ SEASONS = {
     "christmas":  {"name": "❄️ Winter/Christmas",  "emoji": "❄️",  "color": 0x57d8ff},
     "summer":     {"name": "☀️ Verano",            "emoji": "☀️",  "color": 0xf1c40f},
     "april_fools":{"name": "🃏 April Fools",       "emoji": "🃏",  "color": 0xeb459e},
+    "season_not_found": {"name": "💾 [SEASON NOT FOUND]", "emoji": "💾", "color": 0x57f287},
 }
 
 # ============================================================
@@ -151,6 +152,7 @@ VARIANTS = {
     "santa_vaca":     {"blanco":   {"color": "blanco",   "name_suffix": "Blanco"}},
     "sans":           {"azul":     {"color": "azul",     "name_suffix": "Azul"}},
     "og_gamer64":     {"blanco":   {"color": "blanco",   "name_suffix": "Blanco"}},
+    "ryu":            {"azul":     {"color": "azul",     "name_suffix": "Azul"}},
 }
 
 
@@ -229,6 +231,25 @@ SEASONAL_VARIANTS = {
         ),
         "hp_mod": 0.5, "atk_mod": 1.25,
     },
+    # ── [SEASON NOT FOUND] ─────────────────────────────────────────────────
+    "corrupted": {
+        "name":    "💾 Corrupted",
+        "color":   "season_not_found",
+        "passive": "corrupted",
+        "desc":    (
+            "Con 50+ energia: 70% de aplicar Manipulation 2 turnos a una figura del oponente. "
+            "Todos los ataques aplican veneno 2 turnos."
+        ),
+    },
+    "glitched": {
+        "name":    "💾 Glitched",
+        "color":   "season_not_found",
+        "passive": "glitched",
+        "desc":    (
+            "50% de aplicar Manipulation 3 turnos al atacar. "
+            "40% de aplicar un efecto aleatorio con cada ataque."
+        ),
+    },
 }
 
 # Mapeo temporada → variantes desbloqueables
@@ -236,7 +257,8 @@ SEASON_VARIANT_POOL = {
     "halloween":   ["halloween", "trick_or_treat"],
     "christmas":   ["christmas", "ice_bender"],
     "summer":      ["fire_bender", "sun_god"],
-    "april_fools": ["april_fools", "toon", "low_effort_high_stats"],
+    "april_fools":      ["april_fools", "toon", "low_effort_high_stats"],
+    "season_not_found": ["corrupted", "glitched"],
 }
 
 # Efectos negativos que puede aplicar Low Effort, High Stats
@@ -308,6 +330,55 @@ def apply_variant(fighter: dict, variant_key: str, is_seasonal: bool = False):
 #  Llamar desde execute_action DESPUÉS de calcular el daño base
 # ============================================================
 
+ALL_RANDOM_EFFECTS = ["frozen", "burning", "stunned", "poisoned", "dizziness"]
+
+
+def _apply_manipulation(target: dict, battle, turns: int, log: list):
+    """
+    Aplica el efecto MANIPULATION a 'target'.
+    La figura es marcada como manipulada por 'turns' turnos.
+    La logica de mover la figura al equipo contrario se maneja en execute_action.
+    """
+    if target.get("hp", 0) <= 0:
+        log.append(f"   💾 Manipulation fallo: {target.get('name','?')} ya esta derrotada.")
+        return
+    if target.get("manipulated"):
+        log.append(f"   💾 {target.get('name','?')} ya esta manipulada.")
+        return
+
+    target["manipulated"]        = True
+    target["manipulation_turns"] = turns
+    target["manipulation_energy_penalty"] = True   # gana menos energia
+    target["manipulation_no_passive"]     = True   # no puede activar pasivas
+    log.append(
+        f"   💾 **MANIPULATION**: {target.get('name','?')} ha sido manipulada "
+        f"por {turns} turnos! La figura ataca a su propio equipo."
+    )
+
+
+def _apply_random_effect(target: dict, log: list):
+    """Aplica un efecto negativo aleatorio al objetivo (usado por Glitched)."""
+    effect = random.choice(ALL_RANDOM_EFFECTS)
+    if effect == "frozen":
+        target["frozen"] = True
+        target["frozen_turns"] = max(target.get("frozen_turns", 0), 2)
+        log.append(f"   💾 **Glitched** — Efecto random: {target.get('name','?')} FROZEN 2T!")
+    elif effect == "burning":
+        target["burning"] = True
+        target["burning_turns"] = max(target.get("burning_turns", 0), 2)
+        log.append(f"   💾 **Glitched** — Efecto random: {target.get('name','?')} BURNING 2T!")
+    elif effect == "stunned":
+        target["stun_turns"] = max(target.get("stun_turns", 0), 1)
+        log.append(f"   💾 **Glitched** — Efecto random: {target.get('name','?')} STUNNED 1T!")
+    elif effect == "poisoned":
+        target.setdefault("dots", []).append({"dmg": 6, "turns": 2})
+        log.append(f"   💾 **Glitched** — Efecto random: {target.get('name','?')} POISONED 2T!")
+    elif effect == "dizziness":
+        target["dizziness"] = True
+        target["dizziness_turns"] = max(target.get("dizziness_turns", 0), 2)
+        log.append(f"   💾 **Glitched** — Efecto random: {target.get('name','?')} DIZZY 2T!")
+
+
 def apply_variant_on_attack(attacker: dict, defender: dict,
                              base_dmg: int, battle, log: list) -> int:
     """
@@ -374,6 +445,20 @@ def apply_variant_on_attack(attacker: dict, defender: dict,
     elif passive == "toon_dodge":
         # Este efecto se aplica en defensa (ver apply_variant_on_defense)
         pass
+
+    # ── CORRUPTED: manipulation + poison con 50+ energia ─────────────────
+    elif passive == "corrupted":
+        defender.setdefault("dots", []).append({"dmg": 8, "turns": 2})
+        log.append(f"   💾 **Corrupted**: {defender['name']} envenenado 2 turnos!")
+        if energy >= 50 and random.randint(1, 100) <= 70:
+            _apply_manipulation(defender, battle=battle, turns=2, log=log)
+
+    # ── GLITCHED: manipulation + efecto random ───────────────────────────
+    elif passive == "glitched":
+        if random.randint(1, 100) <= 50:
+            _apply_manipulation(defender, battle=battle, turns=3, log=log)
+        if random.randint(1, 100) <= 40:
+            _apply_random_effect(defender, log)
 
     # ── LOHS ─────────────────────────────────────────────────────────────
     elif passive == "lohs":
