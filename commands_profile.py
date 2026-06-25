@@ -211,8 +211,186 @@ async def show_figure_menu(interaction, user, figs, page: int, viewed_user_id=No
         await interaction.edit_original_response(embed=embed, view=view)
 
 # --- EQUIPAR ---
-async def show_equip_menu(interaction, user, step: int):
-    pos_names = ["🥇 Frontal", "🥈 Centro", "🥉 Trasero"]
+POS_NAMES  = ["🥇 Frontal", "🥈 Centro", "🥉 Trasero"]
+POS_LABELS = ["Frontal (primer atacante)", "Centro (segundo)", "Trasero (reserva)"]
+
+
+def _build_equip_embed(user: dict, step: int, temp_team: list) -> discord.Embed:
+    """Genera el embed para el paso 'step' del menú de equipar."""
+    figs     = user.get("figures", [])
+    team     = temp_team
+
+    embed = discord.Embed(
+        title=f"⚔️ Equipar — Paso {step + 1}/3: {POS_LABELS[step]}",
+        description=(
+            "Elige la figura para esta posición del equipo.\n"
+            "Tu equipo se muestra abajo conforme lo vas armando."
+        ),
+        color=0x3498db,
+    )
+
+    # Equipo actual (parcial)
+    team_txt = ""
+    for i in range(3):
+        if i < step and team[i] is not None and team[i] < len(figs):
+            fd  = figs[team[i]]
+            fig = FIGURES.get(fd["key"], {})
+            team_txt += f"{POS_NAMES[i]}: {fig.get('emoji','')} **{fig.get('name','?')}** (Nv.{fd.get('level',1)})\n"
+        elif i == step:
+            team_txt += f"{POS_NAMES[i]}: ← _eligiendo ahora_\n"
+        else:
+            team_txt += f"{POS_NAMES[i]}: _(pendiente)_\n"
+    embed.add_field(name="🛡️ Tu equipo", value=team_txt, inline=False)
+    embed.set_footer(text="Puedes elegir la misma figura en varias posiciones.")
+    return embed
+
+
+async def show_equip_menu(interaction: discord.Interaction, user: dict, step: int,
+                           temp_team: list = None, edit: bool = False):
+    """
+    Muestra el selector de figura para la posición 'step' (0=frontal, 1=centro, 2=trasero).
+    temp_team es la lista de índices ya elegidos para las posiciones anteriores.
+    """
+    if temp_team is None:
+        # Heredar el equipo actual como base para que no se pierda lo ya equipado
+        current = user.get("team", [None, None, None])
+        temp_team = list(current) + [None] * (3 - len(current))
+        temp_team = temp_team[:3]
+
+    figs = user.get("figures", [])
+    if not figs:
+        msg = "❌ No tienes figuras. Usa `/tienda` para comprar."
+        await interaction.response.send_message(msg, ephemeral=True)
+        return
+
+    uid   = interaction.user.id
+    embed = _build_equip_embed(user, step, temp_team)
+
+    # Build Select with all figures (max 25 shown, paginated via multiple selects if needed)
+    # Group unique figures for cleaner display
+    unique = {}
+    for i, fd in enumerate(figs):
+        k = fd["key"]
+        if k not in unique or fd.get("level", 1) > unique[k]["level"]:
+            unique[k] = {"idx": i, "level": fd.get("level", 1), "fd": fd}
+
+    options = []
+    for k, data in list(unique.items())[:25]:
+        fig  = FIGURES.get(k, {})
+        star = RARITY_STARS.get(fig.get("rarity", "común"), "⚪")
+        options.append(discord.SelectOption(
+            label=f"{fig.get('name', k)} (Nv.{data['level']})",
+            value=str(data["idx"]),
+            description=f"{fig.get('rarity','?').capitalize()} · HP:{fig.get('hp','?')} ATK:{fig.get('attack','?')} DEF:{fig.get('defense','?')}",
+            emoji=star,
+        ))
+
+    view   = discord.ui.View(timeout=120)
+    select = discord.ui.Select(
+        placeholder=f"Elige para {POS_NAMES[step]}...",
+        options=options,
+        custom_id=f"equip_step_{step}",
+        row=0,
+    )
+
+    def make_select_cb(current_step: int, current_temp: list):
+        async def select_cb(inter: discord.Interaction):
+            if inter.user.id != uid:
+                await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                return
+
+            chosen_idx   = int(inter.data["values"][0])
+            new_temp     = list(current_temp)
+            new_temp[current_step] = chosen_idx
+
+            if current_step < 2:
+                # Reload user data and proceed to next step
+                db2   = load_db()
+                user2 = get_user(db2, inter.user.id)
+                await show_equip_menu(inter, user2, current_step + 1, new_temp, edit=True)
+            else:
+                # Final step — save team
+                db2   = load_db()
+                user2 = get_user(db2, inter.user.id)
+                figs2 = user2.get("figures", [])
+
+                # Validate indices still exist
+                valid_team = []
+                for idx in new_temp:
+                    if idx is not None and idx < len(figs2):
+                        valid_team.append(idx)
+                    else:
+                        valid_team.append(None)
+
+                user2["team"] = valid_team
+                save_db(db2)
+
+                # Build confirmation embed
+                conf = discord.Embed(
+                    title="✅ ¡Equipo guardado!",
+                    description="Tu equipo de batalla ha sido actualizado.",
+                    color=0x2ecc71,
+                )
+                team_txt = ""
+                for i, idx in enumerate(valid_team):
+                    if idx is not None and idx < len(figs2):
+                        fd  = figs2[idx]
+                        fig = FIGURES.get(fd["key"], {})
+                        team_txt += f"{POS_NAMES[i]}: {fig.get('emoji','')} **{fig.get('name','?')}** (Nv.{fd.get('level',1)})\n"
+                    else:
+                        team_txt += f"{POS_NAMES[i]}: _(vacío)_\n"
+                conf.add_field(name="⚔️ Tu nuevo equipo", value=team_txt, inline=False)
+                conf.set_footer(text="Usa /perfil para ver tu equipo en cualquier momento.")
+
+                await inter.response.edit_message(embed=conf, view=None)
+
+        return select_cb
+
+    select.callback = make_select_cb(step, temp_team)
+    view.add_item(select)
+
+    # Skip button — keep current figure in this slot
+    if step > 0:
+        skip_btn = discord.ui.Button(
+            label=f"Mantener posición actual",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"equip_skip_{step}",
+            row=1,
+        )
+        def make_skip_cb(current_step: int, current_temp: list):
+            async def skip_cb(inter: discord.Interaction):
+                if inter.user.id != uid:
+                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                # Keep original team value for this slot
+                db2   = load_db()
+                user2 = get_user(db2, inter.user.id)
+                # Don't change this slot
+                if current_step < 2:
+                    await show_equip_menu(inter, user2, current_step + 1, current_temp, edit=True)
+                else:
+                    # Save as-is
+                    user2["team"] = list(current_temp)
+                    save_db(db2)
+                    await inter.response.edit_message(
+                        embed=discord.Embed(
+                            title="✅ ¡Equipo guardado!",
+                            description="Se mantuvieron las posiciones sin cambios para los slots no elegidos.",
+                            color=0x2ecc71
+                        ),
+                        view=None
+                    )
+            return skip_cb
+        skip_btn.callback = make_skip_cb(step, temp_team)
+        view.add_item(skip_btn)
+
+    if edit:
+        try:
+            await interaction.response.edit_message(embed=embed, view=view)
+        except discord.errors.InteractionResponded:
+            await interaction.edit_original_response(embed=embed, view=view)
+    else:
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 
 def register_commands(bot):

@@ -1274,7 +1274,9 @@ def register_commands(bot):
 
     @bot.tree.command(name="leaderboard", description="Ver los rankings del servidor")
     async def leaderboard_cmd(interaction: discord.Interaction):
-        view = discord.ui.View(timeout=60)
+        # Redirige a /ranking — toda la lógica vive en commands_battle.py
+        from commands_battle import _ranking_cmd
+        await _ranking_cmd(interaction)
 
 
     @bot.tree.command(name="verperfil", description="Ver el perfil de otro usuario")
